@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JSON Atelier</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#17191b;--surface:#202326;--surface2:#2a2e32;--surface3:#262a2e;--input:#17191b;
+  --text:#e4e7ea;--muted:#a7adb4;--line:#454a50;--control:#747b83;
+  --accent:#69737d;--on:#fff;--danger:#915b62;--chip:#30353a;--warn:#c58c92;
+  --radius:9px;--font:15px;--overlay:rgba(4,5,6,.78)
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font:500 var(--font)/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,textarea,select{font:inherit}
+button{touch-action:manipulation}
+.app{min-height:100dvh;padding-bottom:84px}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-top));background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;margin-right:auto}
+.icon,.btn{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;min-height:42px;padding:9px 12px}
+.icon{width:42px;padding:0;font-size:18px}
+.btn.primary{background:var(--accent);color:var(--on);border-color:transparent;font-weight:800}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.45}
+.toolbar{display:flex;gap:8px;overflow:auto;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.toolbar .btn{white-space:nowrap}
+.main{padding:12px;display:grid;gap:12px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.panelHd{display:flex;align-items:center;gap:8px;padding:12px;border-bottom:1px solid var(--line)}
+.panelHd strong{margin-right:auto}
+.panelBody{padding:0}
+.quickPanel .panelBody{padding:12px}
+.muted{color:var(--muted)}
+.badge{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:12px;color:var(--muted)}
+.drop{margin:12px;border:1.5px dashed var(--line);border-radius:8px;padding:22px 18px;text-align:center;background:var(--surface2)}
+.tree{display:grid;gap:0;width:100%;min-width:0}
+
+/* Root: full JSON panel width, zero radius. */
+details.node{border:0;border-radius:0;background:transparent;overflow:visible;min-width:0}
+details.node>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;padding:9px 10px;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--surface2);min-width:0;width:100%}
+details.node>summary::-webkit-details-marker{display:none}
+details.node[data-depth="0"]>summary{border-radius:0;border-left:0;border-right:0;width:100%}
+.caret{display:inline-block;transition:.15s transform;flex:0 0 auto}
+details[open]>.sum .caret{transform:rotate(90deg)}
+.key{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.type{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+
+/* Left-only indentation. Right edge remains flush. */
+.children{position:relative;margin-left:12px;padding:7px 0 0 12px;display:grid;gap:0;min-width:0;width:calc(100% - 12px)}
+.children::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--line)}
+
+/* Remove doubled seams between adjacent hierarchy rows. */
+.children>details.node+details.node>summary,
+.children>.card+.card,
+.children>details.node+.card,
+.children>.card+details.node>summary{border-top:0}
+
+/* Leaf cards: inset only from left hierarchy lane, flush right. */
+.card{width:100%;margin:0;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--surface3);padding:10px;display:grid;gap:8px;min-width:0}
+.rowHead{display:flex;align-items:center;gap:8px}
+.rowHead .k{font-weight:800;word-break:break-all}
+.rowHead .path{margin-left:auto;color:var(--muted);font-size:11px;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field{display:grid;gap:6px}
+input[type=text],input[type=number],textarea,select{width:100%;border:1px solid var(--control);background:var(--input);color:var(--text);border-radius:7px;padding:10px 11px;outline:none}
+textarea{min-height:96px;resize:vertical}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+.minirow{display:flex;gap:7px;flex-wrap:wrap}
+.mini{border:1px solid var(--line);background:var(--chip);color:var(--text);border-radius:7px;padding:7px 9px;min-height:36px}
+.toggle{display:flex;align-items:center;gap:8px}
+.searchbox{display:flex;gap:8px}.searchbox input{flex:1}
+.result{padding:8px 0;border-bottom:1px solid var(--line)}.result:last-child{border-bottom:0}
+.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.navBtn{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;min-height:48px;padding:6px;font-size:12px}
+.drawer{position:fixed;inset:0;z-index:40;display:none;background:var(--overlay)}.drawer.show{display:flex}
+.sheet{margin-top:auto;width:100%;max-height:88dvh;background:var(--surface);border-radius:14px 14px 0 0;border-top:1px solid var(--line);overflow:auto;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+.sheetHd{position:sticky;top:0;background:var(--surface);display:flex;align-items:center;gap:8px;padding:12px;border-bottom:1px solid var(--line);z-index:2}.sheetHd strong{margin-right:auto}
+.section{padding:12px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+.pipelineStep{border:1px solid var(--line);border-radius:8px;background:var(--surface2);padding:10px;display:grid;gap:8px}
+.stepHd{display:flex;align-items:center;gap:8px}.stepHd strong{margin-right:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preview{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;background:var(--input);border:1px solid var(--line);border-radius:7px;padding:10px;max-height:260px;overflow:auto}
+.themeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.themeChoice{min-width:0;text-align:left;border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;padding:10px;display:grid;gap:8px}
+.themeChoice.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.themeName{font-weight:800;white-space:normal;line-height:1.25}.swatches{display:flex;gap:4px}.swatch{height:12px;flex:1;border-radius:3px;border:1px solid var(--line)}
+.fieldSuggestions{display:flex;gap:7px;flex-wrap:wrap;max-height:210px;overflow:auto}
+.fieldChoice{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:7px;padding:7px 9px;min-height:36px}
+.fieldChoice.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--surface2))}
+
+.filterNotice{margin:12px;border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:10px;color:var(--muted)}
+.schemaStatus{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.schemaStatus strong{margin-right:auto}
+.mappingList{display:grid;gap:8px}
+.mappingRow{border:1px solid var(--line);border-radius:8px;background:var(--surface2);padding:9px;display:grid;gap:7px}
+.mappingTarget{display:flex;align-items:center;gap:7px;min-width:0}
+.mappingTarget code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
+.typePill{margin-left:auto;flex:0 0 auto;border:1px solid var(--line);border-radius:999px;padding:2px 7px;color:var(--muted);font-size:11px}
+.schemaArrow{color:var(--muted);font-size:12px}
+.schemaPreview{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;background:var(--input);border:1px solid var(--line);border-radius:7px;padding:10px;max-height:310px;overflow:auto}
+
+.toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:var(--surface3);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 13px;display:none;max-width:88vw;text-align:center}.toast.show{display:block}
+.hidden{display:none!important}
+@media(max-width:520px){.children{margin-left:9px;padding-left:10px;width:calc(100% - 9px)}details.node>summary{padding-left:9px;padding-right:9px}}
+@media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.bottomNav{left:auto;width:420px;right:16px;border:1px solid var(--line);border-radius:10px 10px 0 0}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top"><div class="brand">JSON Atelier</div><button class="icon" id="undoBtn">↶</button><button class="icon" id="redoBtn">↷</button><button class="icon" id="saveBtn">⇩</button></header>
+<div class="toolbar">
+<label class="btn">JSON 열기<input id="fileInput" type="file" accept=".json,application/json" hidden></label>
+<button class="btn" id="pasteBtn">붙여넣기</button><button class="btn" id="copyBtn">전체 복사</button>
+<button class="btn" id="expandBtn">전체 펼치기</button><button class="btn" id="collapseBtn">전체 접기</button>
+<button class="btn" id="fieldViewBtn">필드만 보기</button>
+<button class="btn" id="replaceBtn">치환</button>
+</div>
+<main class="main">
+<section class="panel">
+<div class="panelHd"><strong>JSON</strong><span class="badge" id="statusBadge">파일 없음</span></div>
+<div class="panelBody">
+<div class="drop" id="emptyState"><div style="font-weight:800;margin-bottom:6px">JSON 파일을 열어주세요</div><div class="muted">파일은 브라우저 안에서만 처리됩니다.</div></div>
+<div class="tree hidden" id="tree"></div>
+</div></section>
+<aside class="panel quickPanel"><div class="panelHd"><strong>빠른 탐색</strong></div><div class="panelBody">
+<div class="searchbox"><input id="searchInput" type="text" placeholder="키 또는 값 검색"><button class="btn" id="searchBtn">검색</button></div><div id="searchResults" style="margin-top:10px"></div>
+</div></aside></main>
+</div>
+
+<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="savedSheet">저장 규칙</button><button class="navBtn" data-sheet="recipeSheet">Recipe</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
+
+<div class="drawer" id="fieldViewSheet"><div class="sheet"><div class="sheetHd"><strong>필드만 보기</strong><button class="icon close">×</button></div>
+<div class="section"><div class="muted">선택한 필드만 표시합니다. 여러 필드를 동시에 선택할 수 있습니다.</div>
+<div class="searchbox"><input id="fieldFilterInput" type="text" placeholder="예: content, createdAt"><button class="btn" id="addFieldFilterBtn">추가</button></div>
+<div id="fieldFilterChips" class="minirow"></div>
+<div><div class="muted" style="margin-bottom:7px">현재 JSON에서 발견된 필드</div><div id="fieldKeySuggestions" class="fieldSuggestions"></div></div>
+<div class="minirow"><button class="btn primary" id="applyFieldViewBtn">선택 필드만 보기</button><button class="btn" id="clearFieldViewBtn">전체 필드 보기</button></div>
+</div></div></div>
+
+<div class="drawer" id="replaceSheet"><div class="sheet"><div class="sheetHd"><strong>일괄 치환</strong><button class="icon close">×</button></div>
+<div class="section">
+<label>대상 필드<input id="replaceField" type="text" value="content" placeholder="예: content · 비우면 모든 문자열 필드"></label>
+<label>찾기 Regex<input id="replaceRegex" type="text" placeholder="예: \bCassian\b"></label>
+<div class="grid2"><label>치환문<input id="replaceWith" type="text" placeholder="예: physician"></label><label>Flags<input id="replaceFlags" type="text" value="gi"></label></div>
+<div class="muted">치환문에서 $1, $2 같은 캡처 그룹을 사용할 수 있습니다. 대상 필드를 비우면 JSON의 모든 문자열 값을 검사합니다.</div>
+</div>
+<div class="section"><div class="minirow"><button class="btn" id="previewReplaceBtn">미리보기</button><button class="btn primary" id="applyReplaceBtn">적용</button></div><div id="replacePreview" class="preview">아직 미리보기가 없습니다.</div></div>
+</div></div>
+
+<div class="drawer" id="schemaSheet"><div class="sheet">
+  <div class="sheetHd"><strong>Schema 변환</strong><button class="icon close">×</button></div>
+
+  <div class="section">
+    <div class="schemaStatus">
+      <strong>① 목표 파일 A</strong>
+      <span class="badge" id="schemaTargetStatus">불러오지 않음</span>
+    </div>
+    <label class="btn" style="text-align:center">A 파일 불러오기
+      <input id="schemaTargetInput" type="file" accept=".json,application/json" hidden>
+    </label>
+    <label>기준 객체
+      <select id="schemaTargetPath"><option value="">A 파일을 먼저 불러오세요</option></select>
+    </label>
+    <div class="muted">A에서 선택한 객체의 모양을 목표 구조로 사용합니다.</div>
+  </div>
+
+  <div class="section">
+    <div class="schemaStatus">
+      <strong>② 현재 파일 B</strong>
+      <span class="badge" id="schemaSourceStatus">현재 JSON 없음</span>
+    </div>
+    <label>변환할 범위
+      <select id="schemaSourcePath"><option value="">현재 JSON을 먼저 여세요</option></select>
+    </label>
+    <div class="muted">배열을 고르면 배열 안의 객체들을 한꺼번에 변환합니다.</div>
+  </div>
+
+  <div class="section">
+    <div style="display:flex;align-items:center;gap:8px">
+      <strong style="margin-right:auto">③ 필드 매핑</strong>
+      <button class="btn" id="schemaAutoMapBtn">자동 매핑</button>
+    </div>
+    <div id="schemaMappingList" class="mappingList">
+      <div class="muted">A와 B의 범위를 선택하면 매핑 후보가 표시됩니다.</div>
+    </div>
+    <label class="toggle"><input id="schemaKeepDefaults" type="checkbox" checked> 매핑되지 않은 필드는 A의 예시값/기본값 유지</label>
+    <label class="toggle"><input id="schemaKeepExtras" type="checkbox"> A에 없는 B의 필드도 보존</label>
+  </div>
+
+  <div class="section">
+    <div class="minirow">
+      <button class="btn" id="schemaPreviewBtn">미리보기</button>
+      <button class="btn primary" id="schemaApplyBtn">B에 적용</button>
+    </div>
+    <div id="schemaPreview" class="schemaPreview">아직 미리보기가 없습니다.</div>
+  </div>
+</div></div>
+
+<div class="drawer" id="pipelineSheet"><div class="sheet"><div class="sheetHd"><strong>Pipeline</strong><button class="icon close">×</button></div>
+<div class="section">
+<label>적용 범위<select id="scopeMode"><option value="selected">선택한 배열/객체의 모든 항목</option><option value="key">전체 JSON에서 특정 키를 가진 객체</option><option value="path">경로 패턴</option></select></label>
+<div id="selectedScopeInfo" class="muted">트리에서 범위를 선택해주세요.</div><input id="scopeArg" type="text" placeholder="키 이름 또는 memories[*]">
+</div>
+<div class="section"><div class="grid2"><label>소스 필드<input id="sourceField" type="text" value="content"></label><label>결과 필드<input id="targetField" type="text" value="time"></label></div>
+<label>추출 Regex<input id="extractRegex" type="text" placeholder="예: Date:\s*(.*?)\n"></label>
+<div class="grid2"><label>Flags<input id="regexFlags" type="text" value="m"></label><label>Capture<input id="captureGroup" type="number" min="0" value="1"></label></div>
+<label class="toggle"><input id="removeMatch" type="checkbox" checked> 소스에서 전체 match 제거</label></div>
+<div class="section"><div style="display:flex;align-items:center"><strong style="margin-right:auto">Transform 단계</strong><button class="btn" id="addTransformBtn">+ 추가</button></div><div id="transformList"></div></div>
+<div class="section"><div class="minirow"><button class="btn" id="previewPipelineBtn">미리보기</button><button class="btn primary" id="applyPipelineBtn">적용</button><button class="btn" id="savePipelineBtn">Pipeline 저장</button></div><div id="pipelinePreview" class="preview">아직 미리보기가 없습니다.</div></div>
+</div></div>
+
+<div class="drawer" id="savedSheet"><div class="sheet"><div class="sheetHd"><strong>저장된 Pipeline</strong><button class="icon close">×</button></div><div class="section" id="savedPipelines"></div></div></div>
+
+<div class="drawer" id="recipeSheet"><div class="sheet"><div class="sheetHd"><strong>Recipe</strong><button class="icon close">×</button></div>
+<div class="section"><div class="muted">저장된 Pipeline 여러 개를 순서대로 묶어 실행합니다. Recipe 전체가 Undo 한 단계입니다.</div><input id="recipeName" type="text" placeholder="Recipe 이름"><div id="recipeChecks"></div><button class="btn" id="saveRecipeBtn">Recipe 저장</button></div><div class="section" id="savedRecipes"></div>
+</div></div>
+
+<div class="drawer" id="toolsSheet"><div class="sheet"><div class="sheetHd"><strong>도구</strong><button class="icon close">×</button></div>
+<div class="section"><div style="display:flex;align-items:center;gap:8px"><strong style="margin-right:auto">컬러 팔레트</strong><span class="badge" id="themeBadge">Graphite</span></div><div id="themeGrid" class="themeGrid"></div></div>
+<div class="section"><button class="btn" id="validateBtn">JSON 검증</button><button class="btn" id="findEmptyBtn">빈 값 / null 찾기</button><button class="btn danger" id="clearSavedBtn">저장된 Pipeline/Recipe 삭제</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let data=null,fileName="edited.json",selectedScopePath=null,fieldViewFilters=[];
+let schemaTargetData=null,schemaTargetName="",schemaMappings={};
+let undoStack=[],redoStack=[],batchDepth=0,batchSnapshot=null,transforms=[{type:"trim"}];
+const clone=x=>structuredClone(x), esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const typeOf=v=>v===null?"null":Array.isArray(v)?"array":typeof v;
+const fmtPath=p=>p.length?p.map((x,i)=>typeof x==="number"?`[${x}]`:(i?`.${x}`:x)).join(""):"$";
+const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1600)};
+
+const THEMES=[
+{id:"graphite",name:"Graphite",scheme:"dark",s:["#17191b","#202326","#2a2e32","#69737d","#915b62"]},
+{id:"ivory",name:"Ivory",scheme:"light",s:["#f4f3ef","#fffefa","#e8e9e5","#4f6575","#9b5057"]},
+{id:"kitty",name:"Kitty Classic",scheme:"light",s:["#f8f3ee","#fffdfa","#d9414e","#3d74d8","#f1cb3d"]},
+{id:"latte",name:"Catppuccin Latte",scheme:"light",s:["#eff1f5","#f7ecea","#e5ecf6","#1e66f5","#8839ef"]},
+{id:"cocoa",name:"Cocoa Night",scheme:"dark",s:["#1b1715","#251f1c","#312926","#815b49","#a86573"]},
+{id:"cherry",name:"Cherry Butter",scheme:"light",s:["#ebe0de","#fffcf4","#eeefed","#6c0e15","#f2e0a0"]},
+{id:"crush",name:"Tailored First Crush",scheme:"dark",s:["#1e1e1f","#474243","#28393c","#5c5453","#ac6f6f"]}
+];
+const THEMEV={
+graphite:["#17191b","#202326","#2a2e32","#262a2e","#17191b","#e4e7ea","#a7adb4","#454a50","#747b83","#69737d","#fff","#915b62","#30353a"],
+ivory:["#f4f3ef","#fffefa","#e8e9e5","#f7f6f1","#fffefa","#25282b","#62676c","#c9ccc8","#767b80","#4f6575","#fff","#9b5057","#d8dde0"],
+kitty:["#f8f3ee","#fffdfa","#f1e8e1","#fff8f3","#fffdfa","#30292a","#726767","#dbcfc5","#8f837b","#d9414e","#fff","#a1444d","#f1e8e1"],
+latte:["#eff1f5","#f7ecea","#e5ecf6","#f5f0f3","#fdf9f8","#303446","#686c82","#c7c9d3","#7f849c","#1e66f5","#fff","#d20f39","#e6e9ef"],
+cocoa:["#1b1715","#251f1c","#312926","#2b2421","#1b1715","#d8cdc6","#a8978f","#3a302b","#4b403a","#815b49","#e8ded8","#92505b","#3a302b"],
+cherry:["#ebe0de","#fffcf4","#eeefed","#f7f1e8","#fffdf7","#2a2227","#525a56","#c0c2c1","#6a555c","#6c0e15","#f5ece7","#963a43","#eae9d6"],
+crush:["#1e1e1f","#474243","#28393c","#353738","#202324","#d2c7c4","#a99f9f","#435559","#65767a","#5c5453","#e8dedb","#8f565c","#5d585a"]
+};
+function applyTheme(id){
+ const t=THEMES.find(x=>x.id===id)||THEMES[0],v=THEMEV[t.id],n=["--bg","--surface","--surface2","--surface3","--input","--text","--muted","--line","--control","--accent","--on","--danger","--chip"];
+ n.forEach((k,i)=>document.documentElement.style.setProperty(k,v[i]));document.documentElement.style.colorScheme=t.scheme;localStorage.setItem("jsonAtelier.theme",t.id);renderThemes();
+}
+function renderThemes(){const g=$("#themeGrid");if(!g)return;const cur=localStorage.getItem("jsonAtelier.theme")||"graphite";g.innerHTML="";THEMES.forEach(t=>{const b=document.createElement("button");b.className="themeChoice"+(t.id===cur?" active":"");b.innerHTML=`<span class="themeName">${t.name}</span><span class="swatches">${t.s.map(c=>`<span class="swatch" style="background:${c}"></span>`).join("")}</span>`;b.onclick=()=>applyTheme(t.id);g.appendChild(b)});$("#themeBadge").textContent=(THEMES.find(x=>x.id===cur)||THEMES[0]).name}
+
+function walk(v,p=[],cb){cb(v,p);if(v&&typeof v==="object")Object.entries(v).forEach(([k,x])=>walk(x,[...p,Array.isArray(v)?Number(k):k],cb))}
+function getAtPath(p){let c=data;for(const k of p)c=c?.[k];return c}
+function setAtPath(p,v){if(!p.length){data=v;return}let c=data;for(let i=0;i<p.length-1;i++)c=c[p[i]];c[p.at(-1)]=v}
+function delAtPath(p){let c=data;for(let i=0;i<p.length-1;i++)c=c[p[i]];Array.isArray(c)?c.splice(p.at(-1),1):delete c[p.at(-1)]}
+function history(label){undoStack.push({data:clone(data),label});if(undoStack.length>50)undoStack.shift();redoStack=[];histBtns()}
+function begin(label){batchDepth++;if(batchDepth===1)batchSnapshot={data:clone(data),label}}
+function end(){batchDepth--;if(batchDepth===0&&batchSnapshot){undoStack.push(batchSnapshot);redoStack=[];batchSnapshot=null;histBtns()}}
+function histBtns(){$("#undoBtn").disabled=!undoStack.length;$("#redoBtn").disabled=!redoStack.length}
+$("#undoBtn").onclick=()=>{if(!undoStack.length)return;redoStack.push({data:clone(data)});data=undoStack.pop().data;render()};
+$("#redoBtn").onclick=()=>{if(!redoStack.length)return;undoStack.push({data:clone(data)});data=redoStack.pop().data;render()};
+
+function selectedKey(k){return fieldViewFilters.some(f=>f.toLowerCase()===String(k).toLowerCase())}
+function subtree(v){if(!fieldViewFilters.length)return true;if(Array.isArray(v))return v.some(subtree);if(v&&typeof v==="object")return Object.entries(v).some(([k,x])=>selectedKey(k)||subtree(x));return false}
+function collectKeys(){const m=new Map();if(data===null)return[];walk(data,[],v=>{if(v&&typeof v==="object"&&!Array.isArray(v))Object.keys(v).forEach(k=>m.set(k,(m.get(k)||0)+1))});return [...m].sort((a,b)=>b[1]-a[1]).slice(0,100)}
+
+function render(){
+ const has=data!==null;$("#emptyState").classList.toggle("hidden",has);$("#tree").classList.toggle("hidden",!has);
+ $("#statusBadge").textContent=has?(fieldViewFilters.length?`필드 뷰 · ${fieldViewFilters.length}개`:typeOf(data)):"파일 없음";
+ if(has){$("#tree").innerHTML="";if(fieldViewFilters.length&&!subtree(data)){const n=document.createElement("div");n.className="filterNotice";n.textContent="선택 필드를 찾지 못했습니다.";$("#tree").appendChild(n)}else $("#tree").appendChild(renderNode(data,[],"$",true,false))}
+ histBtns();renderFieldSuggestions();
+ if(typeof refreshSchemaSelectors==="function" && $("#schemaSourcePath")) refreshSchemaSelectors()
+}
+function renderNode(value,path,keyLabel,open=false,force=false){
+ const t=typeOf(value);
+ if(t==="object"||t==="array"){
+  const d=document.createElement("details");d.className="node";d.dataset.depth=String(path.length);d.open=fieldViewFilters.length?true:(open||path.length<1);
+  const s=document.createElement("summary");s.className="sum";s.innerHTML=`<span class="caret">›</span><span class="key">${esc(keyLabel)}</span><span class="type">${t==="array"?"Array":"Object"} · ${Object.keys(value).length}</span>`;d.appendChild(s);
+  const ch=document.createElement("div");ch.className="children";
+  if(!fieldViewFilters.length){const tools=document.createElement("div");tools.className="minirow";tools.style.padding="7px 0";const a=document.createElement("button");a.className="mini";a.textContent="범위 선택";a.onclick=e=>{e.preventDefault();selectedScopePath=[...path];toast(fmtPath(path)+" 선택됨")};const b=document.createElement("button");b.className="mini";b.textContent=t==="array"?"+ 항목":"+ 필드";b.onclick=e=>{e.preventDefault();history("add");if(t==="array")value.push(null);else{let k="newKey",i=1;while(k in value)k="newKey"+i++;value[k]=""}render()};tools.append(a,b);ch.appendChild(tools)}
+  Object.entries(value).forEach(([k,v])=>{const kp=t==="array"?Number(k):k,exact=t==="object"&&selectedKey(k);let show=true;if(fieldViewFilters.length&&!force)show=t==="array"?subtree(v):(exact||subtree(v));if(show)ch.appendChild(renderNode(v,[...path,kp],String(k),false,force||exact))});
+  d.appendChild(ch);return d
+ }
+ const c=document.createElement("div");c.className="card";
+ const h=document.createElement("div");h.className="rowHead";h.innerHTML=`<div class="k">${esc(keyLabel)}</div><div class="path">${esc(fmtPath(path))}</div>`;
+ if(!fieldViewFilters.length){const x=document.createElement("button");x.className="mini";x.textContent="삭제";x.onclick=()=>{history("delete");delAtPath(path);render()};h.appendChild(x)}c.appendChild(h);
+ const f=document.createElement("div");f.className="field",key=String(path.at(-1)||"").toLowerCase();
+ if(t==="string"){const long=value.length>80||value.includes("\n")||["content","text","prompt","body","description"].some(x=>key.includes(x));const i=document.createElement(long?"textarea":"input");if(!long)i.type="text";i.value=value;i.onchange=()=>{history("edit");setAtPath(path,i.value)};f.appendChild(i)}
+ else if(t==="number"){const i=document.createElement("input");i.type="number";i.value=value;i.onchange=()=>{history("edit");setAtPath(path,Number(i.value));render()};f.appendChild(i)}
+ else if(t==="boolean"){const l=document.createElement("label");l.className="toggle";const i=document.createElement("input");i.type="checkbox";i.checked=value;i.onchange=()=>{history("edit");setAtPath(path,i.checked);render()};l.append(i,document.createTextNode(" "+value));f.appendChild(l)}
+ else{const r=document.createElement("div");r.className="minirow";["string","number","boolean","object","array"].forEach(nt=>{const b=document.createElement("button");b.className="mini";b.textContent=`null → ${nt}`;b.onclick=()=>{history("type");setAtPath(path,nt==="string"?"":nt==="number"?0:nt==="boolean"?false:nt==="object"?{}:[]);render()};r.appendChild(b)});f.appendChild(r)}
+ c.appendChild(f);return c
+}
+
+async function loadFile(file){try{data=JSON.parse(await file.text());fileName=file.name.replace(/\.json$/i,"")+"-edited.json";undoStack=[];redoStack=[];fieldViewFilters=[];render();toast("JSON을 열었습니다.")}catch(e){alert("JSON 파싱 오류:\n"+e.message)}}
+$("#fileInput").onchange=e=>e.target.files[0]&&loadFile(e.target.files[0]);
+$("#pasteBtn").onclick=()=>{try{const x=prompt("JSON 원문을 붙여넣어 주세요.");if(x===null)return;data=JSON.parse(x);render()}catch(e){alert(e.message)}};
+$("#copyBtn").onclick=async()=>{if(data!==null){await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast("복사했습니다.")}};
+$("#saveBtn").onclick=()=>{if(data===null)return;const u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"})),a=document.createElement("a");a.href=u;a.download=fileName;a.click();setTimeout(()=>URL.revokeObjectURL(u),500)};
+$("#expandBtn").onclick=()=>$$("details.node").forEach(x=>x.open=true);$("#collapseBtn").onclick=()=>$$("details.node").forEach(x=>x.open=false);
+
+$("#searchBtn").onclick=()=>{const q=$("#searchInput").value.toLowerCase(),out=[];if(q&&data!==null)walk(data,[],(v,p)=>{const k=String(p.at(-1)||"");if(k.toLowerCase().includes(q)||(["string","number","boolean"].includes(typeof v)&&String(v).toLowerCase().includes(q)))out.push({p,v})});$("#searchResults").innerHTML=out.slice(0,200).map(r=>`<div class="result"><strong>${esc(fmtPath(r.p))}</strong><div class="muted">${esc(String(r.v).slice(0,180))}</div></div>`).join("")||'<div class="muted">결과 없음</div>'};
+
+function renderFieldChips(){const e=$("#fieldFilterChips");e.innerHTML=fieldViewFilters.length?"":'<span class="muted">선택된 필드 없음</span>';fieldViewFilters.forEach((f,i)=>{const b=document.createElement("button");b.className="mini";b.textContent=f+" ×";b.onclick=()=>{fieldViewFilters.splice(i,1);renderFieldChips();renderFieldSuggestions()};e.appendChild(b)});$("#fieldViewBtn").textContent=fieldViewFilters.length?`필드만 보기 (${fieldViewFilters.length})`:"필드만 보기"}
+function renderFieldSuggestions(){const e=$("#fieldKeySuggestions");if(!e)return;e.innerHTML="";const ks=collectKeys();if(!ks.length){e.innerHTML='<span class="muted">JSON을 열면 필드 후보가 표시됩니다.</span>';return}ks.forEach(([k,n])=>{const b=document.createElement("button");b.className="fieldChoice"+(selectedKey(k)?" active":"");b.textContent=`${k} (${n})`;b.onclick=()=>{const i=fieldViewFilters.findIndex(x=>x.toLowerCase()===k.toLowerCase());if(i>=0)fieldViewFilters.splice(i,1);else fieldViewFilters.push(k);renderFieldChips();renderFieldSuggestions()};e.appendChild(b)})}
+function addFields(){const x=$("#fieldFilterInput").value.trim();if(!x)return;x.split(",").map(s=>s.trim()).filter(Boolean).forEach(k=>{if(!selectedKey(k))fieldViewFilters.push(k)});$("#fieldFilterInput").value="";renderFieldChips();renderFieldSuggestions()}
+$("#fieldViewBtn").onclick=()=>{$("#fieldViewSheet").classList.add("show");renderFieldSuggestions()};
+$("#addFieldFilterBtn").onclick=addFields;$("#fieldFilterInput").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();addFields()}};
+$("#applyFieldViewBtn").onclick=()=>{addFields();if(!fieldViewFilters.length)return toast("필드를 선택해주세요.");$("#fieldViewSheet").classList.remove("show");render()};
+$("#clearFieldViewBtn").onclick=()=>{fieldViewFilters=[];$("#fieldViewSheet").classList.remove("show");renderFieldChips();render()};
+
+function runReplace(mut=false){
+ const field=$("#replaceField").value.trim(),pattern=$("#replaceRegex").value,repl=$("#replaceWith").value,flags=$("#replaceFlags").value.trim();
+ if(!pattern)throw new Error("찾기 Regex를 입력해주세요.");
+ let probe;try{probe=new RegExp(pattern,flags)}catch(e){throw new Error("Regex 오류: "+e.message)}
+ const out=[];
+ walk(data,[],(v,p)=>{
+  if(typeof v!=="string")return;
+  const key=String(p.at(-1)??"");
+  if(field&&key!==field)return;
+  const re=new RegExp(probe.source,probe.flags),nv=v.replace(re,repl);
+  if(nv===v)return;
+  out.push({p,a:v,b:nv});
+  if(mut)setAtPath(p,nv);
+ });
+ return out
+}
+function replacePreviewText(ch){return ch.length?`변경 예정: ${ch.length}개\n\n`+ch.slice(0,30).map((x,i)=>`#${i+1} ${fmtPath(x.p)}\n${JSON.stringify(x.a)}\n→ ${JSON.stringify(x.b)}`).join("\n\n")+(ch.length>30?`\n\n… ${ch.length-30}개 더 있음`:""):"변경 예정 항목이 없습니다."}
+$("#replaceBtn").onclick=()=>$("#replaceSheet").classList.add("show");
+$("#previewReplaceBtn").onclick=()=>{if(data===null)return toast("JSON이 없습니다.");try{$("#replacePreview").textContent=replacePreviewText(runReplace(false))}catch(e){alert(e.message)}};
+$("#applyReplaceBtn").onclick=()=>{if(data===null)return toast("JSON이 없습니다.");try{const ch=runReplace(false);if(!ch.length){$("#replacePreview").textContent=replacePreviewText(ch);return toast("변경할 항목이 없습니다.")}history("regex replace");runReplace(true);render();$("#replacePreview").textContent=replacePreviewText(ch);toast(`${ch.length}개 치환 완료`)}catch(e){alert(e.message)}};
+
+$$(".navBtn").forEach(b=>b.onclick=()=>$("#"+b.dataset.sheet).classList.add("show"));$$(".close").forEach(b=>b.onclick=()=>b.closest(".drawer").classList.remove("show"));$$(".drawer").forEach(d=>d.onclick=e=>{if(e.target===d)d.classList.remove("show")});
+
+
+function pathKey(p){return JSON.stringify(p)}
+function parsePathKey(k){try{return JSON.parse(k)}catch{return[]}}
+function labelPath(p){return fmtPath(p)}
+
+function collectTargetObjects(root){
+ const out=[];
+ function rec(v,p=[]){
+  if(v&&typeof v==="object"){
+   if(!Array.isArray(v))out.push({p,v,label:`${labelPath(p)} · Object (${Object.keys(v).length})`});
+   Object.entries(v).forEach(([k,x])=>rec(x,[...p,Array.isArray(v)?Number(k):k]));
+  }
+ }
+ rec(root);
+ return out;
+}
+function collectSourceScopes(root){
+ const out=[];
+ function rec(v,p=[]){
+  if(Array.isArray(v)){
+   const objectCount=v.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)).length;
+   if(objectCount)out.push({p,v,label:`${labelPath(p)} · Array (${objectCount} objects)`});
+   v.forEach((x,i)=>rec(x,[...p,i]));
+  }else if(v&&typeof v==="object"){
+   out.push({p,v,label:`${labelPath(p)} · Object (${Object.keys(v).length})`});
+   Object.entries(v).forEach(([k,x])=>rec(x,[...p,k]));
+  }
+ }
+ rec(root);
+ return out;
+}
+function getFrom(root,p){let c=root;for(const k of p){if(c==null)return undefined;c=c[k]}return c}
+function setIn(root,p,val){
+ if(!p.length)return val;
+ let c=root;
+ for(let i=0;i<p.length-1;i++){
+  const k=p[i],next=p[i+1];
+  if(c[k]==null||typeof c[k]!=="object")c[k]=typeof next==="number"?[]:{};
+  c=c[k];
+ }
+ c[p.at(-1)]=val; return root
+}
+function leafEntries(v,p=[]){
+ const out=[];
+ function rec(x,q){
+  if(Array.isArray(x)){out.push({p:q,v:x,t:"array",name:String(q.at(-1)??"$")});return}
+  if(x&&typeof x==="object"){
+   const keys=Object.keys(x);
+   if(!keys.length){out.push({p:q,v:x,t:"object",name:String(q.at(-1)??"$")});return}
+   keys.forEach(k=>rec(x[k],[...q,k]));return
+  }
+  out.push({p:q,v:x,t:typeOf(x),name:String(q.at(-1)??"$")})
+ }
+ rec(v,p);return out
+}
+function blankLike(v){
+ if(Array.isArray(v))return[];
+ if(v===null)return null;
+ if(typeof v==="string")return"";
+ if(typeof v==="number")return 0;
+ if(typeof v==="boolean")return false;
+ if(v&&typeof v==="object")return{};
+ return null
+}
+function makeTargetBase(template,keepDefaults){
+ if(keepDefaults)return clone(template);
+ function rec(v){
+  if(Array.isArray(v))return[];
+  if(v&&typeof v==="object"){const o={};for(const [k,x] of Object.entries(v))o[k]=rec(x);return o}
+  return blankLike(v)
+ }
+ return rec(template)
+}
+function normalizedName(s){return String(s).toLowerCase().replace(/[^a-z0-9가-힣]/g,"")}
+function lev(a,b){
+ a=normalizedName(a);b=normalizedName(b);if(a===b)return 0;if(!a.length)return b.length;if(!b.length)return a.length;
+ const d=Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));
+ for(let i=0;i<=a.length;i++)d[i][0]=i;for(let j=0;j<=b.length;j++)d[0][j]=j;
+ for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+ return d[a.length][b.length]
+}
+function autoSourceFor(targetLeaf,sourceLeaves){
+ let best=null,bestScore=-1;
+ for(const s of sourceLeaves){
+  let score=0;
+  const tn=normalizedName(targetLeaf.name),sn=normalizedName(s.name);
+  if(tn===sn)score+=100;
+  else{
+   const dist=lev(tn,sn),max=Math.max(tn.length,sn.length)||1;
+   score+=Math.max(0,1-dist/max)*45;
+  }
+  if(targetLeaf.t===s.t)score+=18;
+  if(targetLeaf.p.join(".").toLowerCase()===s.p.join(".").toLowerCase())score+=30;
+  if(score>bestScore){best=s;bestScore=score}
+ }
+ return bestScore>=45?best:null
+}
+function currentTargetTemplate(){
+ if(!schemaTargetData)return null;
+ const opt=$("#schemaTargetPath").selectedOptions[0];if(!opt||!opt.dataset.path)return null;
+ return getFrom(schemaTargetData,parsePathKey(opt.dataset.path))
+}
+function currentSourceScope(){
+ if(data===null)return null;
+ const opt=$("#schemaSourcePath").selectedOptions[0];if(!opt||!opt.dataset.path)return null;
+ const p=parsePathKey(opt.dataset.path);return {p,v:getFrom(data,p)}
+}
+function sourceSample(scope){
+ if(!scope)return null;
+ if(Array.isArray(scope.v))return scope.v.find(x=>x&&typeof x==="object"&&!Array.isArray(x))||null;
+ return scope.v&&typeof scope.v==="object"&&!Array.isArray(scope.v)?scope.v:null
+}
+function refreshSchemaSelectors(){
+ const ta=$("#schemaTargetPath"),sa=$("#schemaSourcePath");
+ ta.innerHTML="";
+ if(!schemaTargetData){ta.innerHTML='<option>A 파일을 먼저 불러오세요</option>';$("#schemaTargetStatus").textContent="불러오지 않음"}
+ else{
+  const opts=collectTargetObjects(schemaTargetData);
+  opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if(i===0)o.selected=true;ta.appendChild(o)});
+  $("#schemaTargetStatus").textContent=schemaTargetName||"A loaded";
+ }
+ sa.innerHTML="";
+ if(data===null){sa.innerHTML='<option>현재 JSON을 먼저 여세요</option>';$("#schemaSourceStatus").textContent="현재 JSON 없음"}
+ else{
+  const opts=collectSourceScopes(data);
+  opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if(i===0)o.selected=true;sa.appendChild(o)});
+  $("#schemaSourceStatus").textContent=fileName.replace(/-edited\.json$/,"");
+ }
+ renderSchemaMappings(true)
+}
+function renderSchemaMappings(auto=false){
+ const box=$("#schemaMappingList"),template=currentTargetTemplate(),scope=currentSourceScope(),sample=sourceSample(scope);
+ if(!template||!sample){box.innerHTML='<div class="muted">A와 B의 범위를 선택하면 매핑 후보가 표시됩니다.</div>';return}
+ const targets=leafEntries(template),sources=leafEntries(sample);
+ if(auto)schemaMappings={};
+ box.innerHTML="";
+ targets.forEach(t=>{
+  const tk=pathKey(t.p);
+  if(auto){const candidate=autoSourceFor(t,sources);schemaMappings[tk]=candidate?pathKey(candidate.p):""}
+  const row=document.createElement("div");row.className="mappingRow";
+  const hd=document.createElement("div");hd.className="mappingTarget";hd.innerHTML=`<code>${esc(labelPath(t.p))}</code><span class="typePill">${esc(t.t)}</span>`;row.appendChild(hd);
+  const ar=document.createElement("div");ar.className="schemaArrow";ar.textContent="← B에서 가져오기";row.appendChild(ar);
+  const sel=document.createElement("select");
+  const empty=document.createElement("option");empty.value="";empty.textContent="(매핑 안 함)";sel.appendChild(empty);
+  sources.forEach(x=>{const o=document.createElement("option");o.value=pathKey(x.p);o.textContent=`${labelPath(x.p)} · ${x.t}`;sel.appendChild(o)});
+  sel.value=schemaMappings[tk]||"";
+  sel.onchange=()=>schemaMappings[tk]=sel.value;
+  row.appendChild(sel);box.appendChild(row)
+ })
+}
+function mergeExtras(target,source){
+ if(!source||typeof source!=="object"||Array.isArray(source)||!target||typeof target!=="object"||Array.isArray(target))return target;
+ for(const [k,v] of Object.entries(source)){
+  if(!(k in target))target[k]=clone(v);
+  else if(target[k]&&source[k]&&typeof target[k]==="object"&&typeof source[k]==="object"&&!Array.isArray(target[k])&&!Array.isArray(source[k]))mergeExtras(target[k],source[k])
+ }
+ return target
+}
+function convertOne(source,template){
+ const out=makeTargetBase(template,$("#schemaKeepDefaults").checked);
+ for(const [tk,sk] of Object.entries(schemaMappings)){
+  if(!sk)continue;
+  const v=getFrom(source,parsePathKey(sk));
+  if(v!==undefined)setIn(out,parsePathKey(tk),clone(v))
+ }
+ if($("#schemaKeepExtras").checked)mergeExtras(out,source);
+ return out
+}
+function buildSchemaConversion(){
+ const template=currentTargetTemplate(),scope=currentSourceScope();
+ if(!template||!scope)throw new Error("A 기준 객체와 B 변환 범위를 선택해주세요.");
+ if(Array.isArray(scope.v)){
+  const converted=scope.v.map(x=>x&&typeof x==="object"&&!Array.isArray(x)?convertOne(x,template):x);
+  return {path:scope.p,value:converted,count:scope.v.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)).length}
+ }
+ if(scope.v&&typeof scope.v==="object"&&!Array.isArray(scope.v))return {path:scope.p,value:convertOne(scope.v,template),count:1};
+ throw new Error("B 범위는 객체 또는 객체 배열이어야 합니다.")
+}
+function schemaPreviewText(result){
+ const show=Array.isArray(result.value)?result.value.slice(0,3):result.value;
+ return `변환 예정: ${result.count}개\n적용 위치: ${labelPath(result.path)}\n\n${JSON.stringify(show,null,2)}${Array.isArray(result.value)&&result.value.length>3?`\n\n… ${result.value.length-3}개 더 있음`:""}`
+}
+$("#schemaTargetInput").onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{schemaTargetData=JSON.parse(await f.text());schemaTargetName=f.name;schemaMappings={};refreshSchemaSelectors();toast("목표 파일 A를 불러왔습니다.")}
+ catch(err){alert("A 파일 JSON 파싱 오류:\n"+err.message)}
+};
+$("#schemaTargetPath").onchange=()=>renderSchemaMappings(true);
+$("#schemaSourcePath").onchange=()=>renderSchemaMappings(true);
+$("#schemaAutoMapBtn").onclick=()=>{renderSchemaMappings(true);toast("이름과 타입 기준으로 자동 매핑했습니다.")};
+$("#schemaPreviewBtn").onclick=()=>{try{$("#schemaPreview").textContent=schemaPreviewText(buildSchemaConversion())}catch(e){alert(e.message)}};
+$("#schemaApplyBtn").onclick=()=>{
+ if(data===null)return;
+ try{
+  const result=buildSchemaConversion();
+  history("schema conversion");
+  setAtPath(result.path,result.value);
+  render();
+  $("#schemaPreview").textContent=schemaPreviewText(result);
+  toast(`Schema 변환 완료 · ${result.count}개`);
+ }catch(e){alert(e.message)}
+};
+
+function renderTransforms(){const e=$("#transformList");e.innerHTML="";transforms.forEach((t,i)=>{const d=document.createElement("div");d.className="pipelineStep";d.innerHTML=`<div class="stepHd"><strong>단계 ${i+1}</strong></div>`;const s=document.createElement("select");["trim","regexReplace","removeText","prefix","suffix","lower","upper"].forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;s.appendChild(o)});s.value=t.type;s.onchange=()=>{t.type=s.value;renderTransforms()};d.appendChild(s);if(t.type==="regexReplace"){["pattern","replace","flags"].forEach(k=>{const x=document.createElement("input");x.placeholder=k;x.value=t[k]||"";x.oninput=()=>t[k]=x.value;d.appendChild(x)})}else if(["removeText","prefix","suffix"].includes(t.type)){const x=document.createElement("input");x.value=t.text||"";x.oninput=()=>t.text=x.value;d.appendChild(x)}const rm=document.createElement("button");rm.className="mini";rm.textContent="삭제";rm.onclick=()=>{transforms.splice(i,1);renderTransforms()};d.appendChild(rm);e.appendChild(d)})}
+$("#addTransformBtn").onclick=()=>{transforms.push({type:"trim"});renderTransforms()};
+function applyTransforms(v){let s=String(v??"");for(const t of transforms){if(t.type==="trim")s=s.trim();else if(t.type==="regexReplace"){try{s=s.replace(new RegExp(t.pattern||"",t.flags||"g"),t.replace||"")}catch{}}else if(t.type==="removeText")s=s.split(t.text||"").join("");else if(t.type==="prefix")s=(t.text||"")+s;else if(t.type==="suffix")s=s+(t.text||"");else if(t.type==="lower")s=s.toLowerCase();else if(t.type==="upper")s=s.toUpperCase()}return s}
+function scopeObjs(){const m=$("#scopeMode").value,a=$("#scopeArg").value.trim(),out=[];if(m==="selected"){const v=getAtPath(selectedScopePath||[]);if(Array.isArray(v))v.forEach((x,i)=>x&&typeof x==="object"&&!Array.isArray(x)&&out.push({o:x,p:[...(selectedScopePath||[]),i]}));else if(v&&typeof v==="object")Object.entries(v).forEach(([k,x])=>x&&typeof x==="object"&&!Array.isArray(x)&&out.push({o:x,p:[...(selectedScopePath||[]),k]}))}else walk(data,[],(v,p)=>{if(v&&typeof v==="object"&&!Array.isArray(v)&&m==="key"&&Object.hasOwn(v,a))out.push({o:v,p})});return out}
+function runPipe(mut=false){const out=[],src=$("#sourceField").value.trim(),dst=$("#targetField").value.trim();let re;try{re=new RegExp($("#extractRegex").value,$("#regexFlags").value||"")}catch(e){throw new Error("Regex 오류: "+e.message)}for(const {o,p} of scopeObjs()){if(typeof o[src]!=="string")continue;const m=o[src].match(re),g=Number($("#captureGroup").value)||0;if(!m||m[g]===undefined)continue;const nv=applyTransforms(m[g]),ns=$("#removeMatch").checked?o[src].replace(re,""):o[src];out.push({p,a:o[src],b:ns,c:o[dst],d:nv});if(mut){o[dst]=nv;if($("#removeMatch").checked)o[src]=ns}}return out}
+function pv(ch){return ch.length?`변경 예정: ${ch.length}개\n\n`+ch.slice(0,30).map((x,i)=>`#${i+1} ${fmtPath(x.p)}\nsource: ${JSON.stringify(x.a)} → ${JSON.stringify(x.b)}\ntarget: ${JSON.stringify(x.c)} → ${JSON.stringify(x.d)}`).join("\n\n"):"변경 예정 항목이 없습니다."}
+$("#previewPipelineBtn").onclick=()=>{try{$("#pipelinePreview").textContent=pv(runPipe(false))}catch(e){alert(e.message)}};
+$("#applyPipelineBtn").onclick=()=>{if(data===null)return;begin("pipeline");try{const c=runPipe(true);end();render();$("#pipelinePreview").textContent=pv(c);toast(`${c.length}개 변경 적용`)}catch(e){batchDepth=0;batchSnapshot=null;alert(e.message)}};
+
+const LP="jsonAtelier.pipelines",LR="jsonAtelier.recipes",loadP=()=>JSON.parse(localStorage.getItem(LP)||"[]"),saveP=x=>localStorage.setItem(LP,JSON.stringify(x)),loadR=()=>JSON.parse(localStorage.getItem(LR)||"[]"),saveR=x=>localStorage.setItem(LR,JSON.stringify(x));
+$("#savePipelineBtn").onclick=()=>{const n=prompt("Pipeline 이름");if(!n)return;const a=loadP();a.push({name:n,source:$("#sourceField").value,target:$("#targetField").value,regex:$("#extractRegex").value,flags:$("#regexFlags").value,capture:$("#captureGroup").value,remove:$("#removeMatch").checked,transforms:clone(transforms)});saveP(a);renderSaved()};
+function renderSaved(){const a=loadP(),e=$("#savedPipelines");e.innerHTML=a.length?"":'<div class="muted">저장된 Pipeline이 없습니다.</div>';a.forEach((p,i)=>{const d=document.createElement("div");d.className="card";d.style.borderRight="1px solid var(--line)";d.innerHTML=`<strong>${esc(p.name)}</strong>`;const u=document.createElement("button");u.className="btn";u.textContent="불러오기";u.onclick=()=>{$("#sourceField").value=p.source;$("#targetField").value=p.target;$("#extractRegex").value=p.regex;$("#regexFlags").value=p.flags;$("#captureGroup").value=p.capture;$("#removeMatch").checked=p.remove;transforms=clone(p.transforms);renderTransforms();$("#savedSheet").classList.remove("show");$("#pipelineSheet").classList.add("show")};const x=document.createElement("button");x.className="btn danger";x.textContent="삭제";x.onclick=()=>{const z=loadP();z.splice(i,1);saveP(z);renderSaved()};d.append(u,x);e.appendChild(d)})}
+$("#saveRecipeBtn").onclick=()=>toast("Recipe는 다음 튜닝 때 더 다듬을 예정입니다.");
+$("#validateBtn").onclick=()=>toast(data===null?"JSON이 없습니다.":"현재 데이터 구조는 유효합니다.");
+$("#findEmptyBtn").onclick=()=>{if(data===null)return;const r=[];walk(data,[],(v,p)=>{if(v===null||v===""||(Array.isArray(v)&&!v.length)||(v&&typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length))r.push({p,v})});$("#toolsSheet").classList.remove("show");$("#searchResults").innerHTML=r.map(x=>`<div class="result"><strong>${esc(fmtPath(x.p))}</strong></div>`).join("")||'<div class="muted">빈 값 없음</div>'};
+$("#clearSavedBtn").onclick=()=>{if(confirm("저장 규칙을 삭제할까요?")){localStorage.removeItem(LP);localStorage.removeItem(LR);renderSaved()}};
+
+renderTransforms();renderSaved();renderFieldChips();applyTheme(localStorage.getItem("jsonAtelier.theme")||"graphite");render();refreshSchemaSelectors();
+})();
+</script>
+</body>
+</html>
