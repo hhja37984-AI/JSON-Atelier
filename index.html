@@ -94,6 +94,10 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .schemaStatus strong{margin-right:auto}
 .mappingList{display:grid;gap:8px}
 .mappingRow{border:1px solid var(--line);border-radius:8px;background:var(--surface2);padding:9px;display:grid;gap:7px}
+.mappingControls{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:7px}
+.lookupBox{display:grid;gap:7px;padding:9px;border:1px solid var(--line);border-radius:7px;background:var(--surface3)}
+.lookupGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.lookupHint{font-size:12px;color:var(--muted)}
 .mappingTarget{display:flex;align-items:center;gap:7px;min-width:0}
 .mappingTarget code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
 .typePill{margin-left:auto;flex:0 0 auto;border:1px solid var(--line);border-radius:999px;padding:2px 7px;color:var(--muted);font-size:11px}
@@ -453,6 +457,54 @@ function sourceSample(scope){
  if(Array.isArray(scope.v))return scope.v.find(x=>x&&typeof x==="object"&&!Array.isArray(x))||null;
  return scope.v&&typeof scope.v==="object"&&!Array.isArray(scope.v)?scope.v:null
 }
+function mappingConfig(v){
+ if(v&&typeof v==="object"&&!Array.isArray(v))return {
+  source:v.source||"",mode:v.mode||"direct",lookupPath:v.lookupPath||"",
+  lookupKey:v.lookupKey||"",lookupValue:v.lookupValue||"",missing:v.missing||"skip"
+ };
+ return {source:typeof v==="string"?v:"",mode:"direct",lookupPath:"",lookupKey:"",lookupValue:"",missing:"skip"}
+}
+function collectLookupTables(root){
+ const out=[];
+ function rec(v,p=[]){
+  if(Array.isArray(v)){
+   if(v.some(x=>x&&typeof x==="object"&&!Array.isArray(x)))out.push({p,v,label:`${labelPath(p)} · Array lookup`});
+   v.forEach((x,i)=>rec(x,[...p,i]));
+  }else if(v&&typeof v==="object"){
+   const vals=Object.values(v);
+   if(vals.some(x=>x&&typeof x==="object"&&!Array.isArray(x)))out.push({p,v,label:`${labelPath(p)} · Object lookup`});
+   Object.entries(v).forEach(([k,x])=>rec(x,[...p,k]));
+  }
+ }
+ rec(root);
+ return out
+}
+function lookupRows(v){
+ if(Array.isArray(v))return v.filter(x=>x&&typeof x==="object"&&!Array.isArray(x));
+ if(v&&typeof v==="object")return Object.values(v).filter(x=>x&&typeof x==="object"&&!Array.isArray(x));
+ return[]
+}
+function lookupSample(v){return lookupRows(v)[0]||null}
+function lookupToken(v){return typeof v+":"+JSON.stringify(v)}
+function resolveLookupValue(value,cfg){
+ const lp=parsePathKey(cfg.lookupPath||"[]"),table=getFrom(data,lp),rows=lookupRows(table);
+ if(!rows.length||!cfg.lookupKey||!cfg.lookupValue)return value;
+ const kp=parsePathKey(cfg.lookupKey),vp=parsePathKey(cfg.lookupValue),map=new Map();
+ rows.forEach(row=>{const k=getFrom(row,kp);if(k!==undefined)map.set(lookupToken(k),getFrom(row,vp))});
+ const one=x=>{
+  const key=lookupToken(x);
+  if(map.has(key))return {found:true,value:clone(map.get(key))};
+  if(cfg.missing==="keep")return {found:true,value:clone(x)};
+  if(cfg.missing==="null")return {found:true,value:null};
+  return {found:false,value:undefined}
+ };
+ if(Array.isArray(value)){
+  const out=[];
+  value.forEach(x=>{const r=one(x);if(r.found)out.push(r.value)});
+  return out
+ }
+ const r=one(value);return r.found?r.value:undefined
+}
 function refreshSchemaSelectors(){
  const ta=$("#schemaTargetPath"),sa=$("#schemaSourcePath");
  ta.innerHTML="";
@@ -474,21 +526,55 @@ function refreshSchemaSelectors(){
 function renderSchemaMappings(auto=false){
  const box=$("#schemaMappingList"),template=currentTargetTemplate(),scope=currentSourceScope(),sample=sourceSample(scope);
  if(!template||!sample){box.innerHTML='<div class="muted">A와 B의 범위를 선택하면 매핑 후보가 표시됩니다.</div>';return}
- const targets=leafEntries(template),sources=leafEntries(sample);
+ const targets=leafEntries(template),sources=leafEntries(sample),lookups=collectLookupTables(data);
  if(auto)schemaMappings={};
  box.innerHTML="";
  targets.forEach(t=>{
   const tk=pathKey(t.p);
-  if(auto){const candidate=autoSourceFor(t,sources);schemaMappings[tk]=candidate?pathKey(candidate.p):""}
+  if(auto){const candidate=autoSourceFor(t,sources);schemaMappings[tk]={source:candidate?pathKey(candidate.p):"",mode:"direct",lookupPath:"",lookupKey:"",lookupValue:"",missing:"skip"}}
+  let cfg=mappingConfig(schemaMappings[tk]);schemaMappings[tk]=cfg;
   const row=document.createElement("div");row.className="mappingRow";
   const hd=document.createElement("div");hd.className="mappingTarget";hd.innerHTML=`<code>${esc(labelPath(t.p))}</code><span class="typePill">${esc(t.t)}</span>`;row.appendChild(hd);
   const ar=document.createElement("div");ar.className="schemaArrow";ar.textContent="← B에서 가져오기";row.appendChild(ar);
+
+  const controls=document.createElement("div");controls.className="mappingControls";
   const sel=document.createElement("select");
   const empty=document.createElement("option");empty.value="";empty.textContent="(매핑 안 함)";sel.appendChild(empty);
   sources.forEach(x=>{const o=document.createElement("option");o.value=pathKey(x.p);o.textContent=`${labelPath(x.p)} · ${x.t}`;sel.appendChild(o)});
-  sel.value=schemaMappings[tk]||"";
-  sel.onchange=()=>schemaMappings[tk]=sel.value;
-  row.appendChild(sel);box.appendChild(row)
+  sel.value=cfg.source;
+  sel.onchange=()=>{cfg.source=sel.value;schemaMappings[tk]=cfg};
+  const mode=document.createElement("select");
+  [["direct","Direct"],["lookup","Lookup"]].forEach(([v,n])=>{const o=document.createElement("option");o.value=v;o.textContent=n;mode.appendChild(o)});
+  mode.value=cfg.mode;mode.onchange=()=>{cfg.mode=mode.value;schemaMappings[tk]=cfg;renderSchemaMappings(false)};
+  controls.append(sel,mode);row.appendChild(controls);
+
+  if(cfg.mode==="lookup"){
+   const box2=document.createElement("div");box2.className="lookupBox";
+   const tableSel=document.createElement("select");
+   const none=document.createElement("option");none.value="";none.textContent="Lookup 테이블 선택";tableSel.appendChild(none);
+   lookups.forEach(x=>{const o=document.createElement("option");o.value=pathKey(x.p);o.textContent=x.label;tableSel.appendChild(o)});
+   tableSel.value=cfg.lookupPath;
+   const fields=document.createElement("div");fields.className="lookupGrid";
+   const keySel=document.createElement("select"),valSel=document.createElement("select"),missSel=document.createElement("select");
+   function fillLookupFields(){
+    const table=getFrom(data,parsePathKey(cfg.lookupPath||"[]")),sampleRow=lookupSample(table),leaves=sampleRow?leafEntries(sampleRow):[];
+    keySel.innerHTML='<option value="">Key 필드</option>';valSel.innerHTML='<option value="">Value 필드</option>';
+    leaves.forEach(x=>{
+     const a=document.createElement("option");a.value=pathKey(x.p);a.textContent=`${labelPath(x.p)} · ${x.t}`;keySel.appendChild(a);
+     const b=document.createElement("option");b.value=pathKey(x.p);b.textContent=`${labelPath(x.p)} · ${x.t}`;valSel.appendChild(b);
+    });
+    keySel.value=cfg.lookupKey;valSel.value=cfg.lookupValue
+   }
+   tableSel.onchange=()=>{cfg.lookupPath=tableSel.value;cfg.lookupKey="";cfg.lookupValue="";schemaMappings[tk]=cfg;fillLookupFields()};
+   keySel.onchange=()=>{cfg.lookupKey=keySel.value;schemaMappings[tk]=cfg};
+   valSel.onchange=()=>{cfg.lookupValue=valSel.value;schemaMappings[tk]=cfg};
+   [["skip","못 찾으면 제외"],["keep","못 찾으면 원본 유지"],["null","못 찾으면 null"]].forEach(([v,n])=>{const o=document.createElement("option");o.value=v;o.textContent=n;missSel.appendChild(o)});
+   missSel.value=cfg.missing;missSel.onchange=()=>{cfg.missing=missSel.value;schemaMappings[tk]=cfg};
+   fillLookupFields();
+   const hint=document.createElement("div");hint.className="lookupHint";hint.textContent="소스가 배열이면 각 요소를 같은 Lookup으로 변환합니다.";
+   fields.append(keySel,valSel);box2.append(tableSel,fields,missSel,hint);row.appendChild(box2)
+  }
+  box.appendChild(row)
  })
 }
 function mergeExtras(target,source){
@@ -501,9 +587,11 @@ function mergeExtras(target,source){
 }
 function convertOne(source,template){
  const out=makeTargetBase(template,$("#schemaKeepDefaults").checked);
- for(const [tk,sk] of Object.entries(schemaMappings)){
-  if(!sk)continue;
-  const v=getFrom(source,parsePathKey(sk));
+ for(const [tk,raw] of Object.entries(schemaMappings)){
+  const cfg=mappingConfig(raw);if(!cfg.source)continue;
+  let v=getFrom(source,parsePathKey(cfg.source));
+  if(v===undefined)continue;
+  if(cfg.mode==="lookup")v=resolveLookupValue(v,cfg);
   if(v!==undefined)setIn(out,parsePathKey(tk),clone(v))
  }
  if($("#schemaKeepExtras").checked)mergeExtras(out,source);
