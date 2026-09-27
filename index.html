@@ -71,7 +71,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .toggle{display:flex;align-items:center;gap:8px}
 .searchbox{display:flex;gap:8px}.searchbox input{flex:1}
 .result{padding:8px 0;border-bottom:1px solid var(--line)}.result:last-child{border-bottom:0}
-.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(6,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
 .navBtn{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;min-height:48px;padding:6px;font-size:12px}
 .drawer{position:fixed;inset:0;z-index:40;display:none;background:var(--overlay)}.drawer.show{display:flex}
 .sheet{margin-top:auto;width:100%;max-height:88dvh;background:var(--surface);border-radius:14px 14px 0 0;border-top:1px solid var(--line);overflow:auto;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
@@ -103,6 +103,9 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .typePill{margin-left:auto;flex:0 0 auto;border:1px solid var(--line);border-radius:999px;padding:2px 7px;color:var(--muted);font-size:11px}
 .schemaArrow{color:var(--muted);font-size:12px}
 .schemaPreview{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;background:var(--input);border:1px solid var(--line);border-radius:7px;padding:10px;max-height:310px;overflow:auto}
+.transferRule{border:1px solid var(--line);border-radius:8px;background:var(--surface2);padding:9px;display:grid;gap:7px}
+.transferArrow{text-align:center;color:var(--muted);font-size:12px}
+.transferMatchBox{display:grid;gap:8px;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface2)}
 
 .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:var(--surface3);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 13px;display:none;max-width:88vw;text-align:center}.toast.show{display:block}
 .hidden{display:none!important}
@@ -132,7 +135,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 </div></aside></main>
 </div>
 
-<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="savedSheet">저장 규칙</button><button class="navBtn" data-sheet="recipeSheet">Recipe</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
+<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="transferSheet">Transfer</button><button class="navBtn" data-sheet="savedSheet">저장 규칙</button><button class="navBtn" data-sheet="recipeSheet">Recipe</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
 
 <div class="drawer" id="fieldViewSheet"><div class="sheet"><div class="sheetHd"><strong>필드만 보기</strong><button class="icon close">×</button></div>
 <div class="section"><div class="muted">선택한 필드만 표시합니다. 여러 필드를 동시에 선택할 수 있습니다.</div>
@@ -201,6 +204,49 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
   </div>
 </div></div>
 
+<div class="drawer" id="transferSheet"><div class="sheet">
+  <div class="sheetHd"><strong>Field Transfer</strong><button class="icon close">×</button></div>
+
+  <div class="section">
+    <div class="schemaStatus"><strong>① 소스 파일 A</strong><span class="badge" id="transferSourceStatus">불러오지 않음</span></div>
+    <label class="btn" style="text-align:center">A 파일 불러오기<input id="transferSourceInput" type="file" accept=".json,application/json" hidden></label>
+    <label>소스 범위<select id="transferSourcePath"><option value="">A 파일을 먼저 불러오세요</option></select></label>
+  </div>
+
+  <div class="section">
+    <div class="schemaStatus"><strong>② 대상 파일 B</strong><span class="badge" id="transferTargetStatus">현재 JSON 없음</span></div>
+    <label>대상 범위<select id="transferTargetPath"><option value="">현재 JSON을 먼저 여세요</option></select></label>
+    <div class="muted">B의 기존 구조는 유지하고 선택한 필드 값만 변경합니다.</div>
+  </div>
+
+  <div class="section">
+    <strong>③ 엔트리 매칭</strong>
+    <label>Match 방식
+      <select id="transferMatchMode">
+        <option value="direct">Direct · 한 객체 ↔ 한 객체</option>
+        <option value="index">Index · 같은 순서끼리</option>
+        <option value="key">Key Match · 키 값으로 찾기</option>
+      </select>
+    </label>
+    <div id="transferKeyMatch" class="transferMatchBox hidden">
+      <div class="grid2">
+        <label>A 매칭 필드<select id="transferSourceKey"></select></label>
+        <label>B 매칭 필드<select id="transferTargetKey"></select></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div style="display:flex;align-items:center;gap:8px"><strong style="margin-right:auto">④ 값 옮기기</strong><button class="btn" id="addTransferRuleBtn">+ 추가</button></div>
+    <div id="transferRuleList" class="mappingList"></div>
+  </div>
+
+  <div class="section">
+    <div class="minirow"><button class="btn" id="previewTransferBtn">미리보기</button><button class="btn primary" id="applyTransferBtn">B에 적용</button></div>
+    <div id="transferPreview" class="schemaPreview">아직 미리보기가 없습니다.</div>
+  </div>
+</div></div>
+
 <div class="drawer" id="pipelineSheet"><div class="sheet"><div class="sheetHd"><strong>Pipeline</strong><button class="icon close">×</button></div>
 <div class="section">
 <label>적용 범위<select id="scopeMode"><option value="selected">선택한 배열/객체의 모든 항목</option><option value="key">전체 JSON에서 특정 키를 가진 객체</option><option value="path">경로 패턴</option></select></label>
@@ -232,6 +278,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let data=null,fileName="edited.json",selectedScopePath=null,fieldViewFilters=[];
 let schemaTargetData=null,schemaTargetName="",schemaMappings={};
+let transferSourceData=null,transferSourceName="",transferRules=[{source:"",target:""}];
 let undoStack=[],redoStack=[],batchDepth=0,batchSnapshot=null,transforms=[{type:"trim"}];
 const clone=x=>structuredClone(x), esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const typeOf=v=>v===null?"null":Array.isArray(v)?"array":typeof v;
@@ -282,7 +329,8 @@ function render(){
  $("#statusBadge").textContent=has?(fieldViewFilters.length?`필드 뷰 · ${fieldViewFilters.length}개`:typeOf(data)):"파일 없음";
  if(has){$("#tree").innerHTML="";if(fieldViewFilters.length&&!subtree(data)){const n=document.createElement("div");n.className="filterNotice";n.textContent="선택 필드를 찾지 못했습니다.";$("#tree").appendChild(n)}else $("#tree").appendChild(renderNode(data,[],"$",true,false))}
  histBtns();renderFieldSuggestions();
- if(typeof refreshSchemaSelectors==="function" && $("#schemaSourcePath")) refreshSchemaSelectors()
+ if(typeof refreshSchemaSelectors==="function" && $("#schemaSourcePath")) refreshSchemaSelectors();
+ if(typeof refreshTransferSelectors==="function" && $("#transferTargetPath")) refreshTransferSelectors()
 }
 function renderNode(value,path,keyLabel,open=false,force=false){
  const t=typeOf(value);
@@ -740,6 +788,149 @@ $("#schemaApplyBtn").onclick=()=>{
  }catch(e){alert(e.message)}
 };
 
+
+function transferScope(root,sel){
+ if(!root||!sel)return null;
+ const opt=sel.selectedOptions[0];if(!opt||!opt.dataset.path)return null;
+ const p=parsePathKey(opt.dataset.path);
+ return {p,v:getFrom(root,p)}
+}
+function transferSourceScope(){return transferScope(transferSourceData,$("#transferSourcePath"))}
+function transferTargetScope(){return transferScope(data,$("#transferTargetPath"))}
+function transferRows(scope){
+ if(!scope)return[];
+ if(Array.isArray(scope.v))return scope.v.map((row,i)=>({row,index:i,key:i})).filter(x=>isPlainObject(x.row));
+ if(isObjectMap(scope.v))return Object.entries(scope.v).map(([k,row],i)=>({row,index:i,key:k})).filter(x=>isPlainObject(x.row));
+ if(isPlainObject(scope.v))return [{row:scope.v,index:0,key:null}];
+ return[]
+}
+function transferSample(scope){return transferRows(scope)[0]?.row||null}
+function transferLeafOptions(scope){
+ const sample=transferSample(scope);
+ return sample?leafEntries(sample).filter(x=>!x.p.includes("*")):[]
+}
+function fillTransferSelect(sel,leaves,placeholder,value){
+ sel.innerHTML="";
+ const empty=document.createElement("option");empty.value="";empty.textContent=placeholder;sel.appendChild(empty);
+ leaves.forEach(x=>{const o=document.createElement("option");o.value=pathKey(x.p);o.textContent=labelPath(x.p)+" · "+x.t;sel.appendChild(o)});
+ sel.value=value||""
+}
+function refreshTransferSelectors(){
+ const sa=$("#transferSourcePath"),ta=$("#transferTargetPath");
+ if(!sa||!ta)return;
+ const oldS=sa.selectedOptions[0]?.dataset.path||"",oldT=ta.selectedOptions[0]?.dataset.path||"";
+ sa.innerHTML="";
+ if(!transferSourceData){
+  sa.innerHTML='<option>A 파일을 먼저 불러오세요</option>';
+  $("#transferSourceStatus").textContent="불러오지 않음";
+ }else{
+  const opts=collectSourceScopes(transferSourceData);
+  opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if((oldS&&o.dataset.path===oldS)||(!oldS&&i===0))o.selected=true;sa.appendChild(o)});
+  $("#transferSourceStatus").textContent=transferSourceName||"A loaded";
+ }
+ ta.innerHTML="";
+ if(data===null){
+  ta.innerHTML='<option>현재 JSON을 먼저 여세요</option>';
+  $("#transferTargetStatus").textContent="현재 JSON 없음";
+ }else{
+  const opts=collectSourceScopes(data);
+  opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if((oldT&&o.dataset.path===oldT)||(!oldT&&i===0))o.selected=true;ta.appendChild(o)});
+  $("#transferTargetStatus").textContent=fileName.replace(/-edited\.json$/,"");
+ }
+ renderTransferControls()
+}
+function renderTransferControls(){
+ const ss=transferSourceScope(),ts=transferTargetScope(),sl=transferLeafOptions(ss),tl=transferLeafOptions(ts);
+ const mode=$("#transferMatchMode")?.value||"direct";
+ $("#transferKeyMatch")?.classList.toggle("hidden",mode!=="key");
+ if($("#transferSourceKey"))fillTransferSelect($("#transferSourceKey"),sl,"A 매칭 필드",$("#transferSourceKey").value);
+ if($("#transferTargetKey"))fillTransferSelect($("#transferTargetKey"),tl,"B 매칭 필드",$("#transferTargetKey").value);
+ renderTransferRules(sl,tl)
+}
+function renderTransferRules(sl,tl){
+ sl=sl||transferLeafOptions(transferSourceScope());tl=tl||transferLeafOptions(transferTargetScope());
+ const box=$("#transferRuleList");if(!box)return;box.innerHTML="";
+ if(!transferRules.length)transferRules=[{source:"",target:""}];
+ transferRules.forEach((r,i)=>{
+  const d=document.createElement("div");d.className="transferRule";
+  const hd=document.createElement("div");hd.className="stepHd";
+  const st=document.createElement("strong");st.textContent="Transfer "+(i+1);
+  const rm=document.createElement("button");rm.className="mini";rm.textContent="삭제";rm.onclick=()=>{transferRules.splice(i,1);renderTransferRules()};
+  hd.append(st,rm);
+  const grid=document.createElement("div");grid.className="grid2";
+  const s=document.createElement("select"),t=document.createElement("select");
+  fillTransferSelect(s,sl,"A 소스 필드",r.source);fillTransferSelect(t,tl,"B 대상 필드",r.target);
+  s.onchange=()=>r.source=s.value;t.onchange=()=>r.target=t.value;
+  grid.append(s,t);
+  const ar=document.createElement("div");ar.className="transferArrow";ar.textContent="A → B";
+  d.append(hd,grid,ar);box.appendChild(d)
+ })
+}
+function transferToken(v){return typeof v+":"+JSON.stringify(v)}
+function buildTransferResult(){
+ if(data===null||!transferSourceData)throw new Error("A와 B 파일을 준비해주세요.");
+ const rules=transferRules.filter(r=>r.source&&r.target);
+ if(!rules.length)throw new Error("옮길 필드를 하나 이상 지정해주세요.");
+ const ss=transferSourceScope(),ts=transferTargetScope();
+ if(!ss||!ts)throw new Error("A와 B 범위를 선택해주세요.");
+ const srcRows=transferRows(ss),targetRowsOriginal=transferRows(ts);
+ if(!srcRows.length||!targetRowsOriginal.length)throw new Error("A와 B에서 매칭할 객체를 찾지 못했습니다.");
+
+ const targetClone=clone(ts.v),targetRowsClone=transferRows({p:ts.p,v:targetClone});
+ const mode=$("#transferMatchMode").value;
+ let pairIndexes=[];
+
+ if(mode==="direct"){
+  pairIndexes=[[0,0]]
+ }else if(mode==="index"){
+  const n=Math.min(srcRows.length,targetRowsClone.length);
+  pairIndexes=Array.from({length:n},(_,i)=>[i,i])
+ }else{
+  const sk=$("#transferSourceKey").value,tk=$("#transferTargetKey").value;
+  if(!sk||!tk)throw new Error("Key Match에 사용할 A/B 필드를 선택해주세요.");
+  const sp=parsePathKey(sk),tp=parsePathKey(tk),m=new Map();
+  targetRowsOriginal.forEach((x,i)=>{const v=getFrom(x.row,tp);if(v!==undefined)m.set(transferToken(v),i)});
+  srcRows.forEach((x,i)=>{const v=getFrom(x.row,sp),j=m.get(transferToken(v));if(j!==undefined)pairIndexes.push([i,j])})
+ }
+
+ const changes=[];
+ pairIndexes.forEach(([si,ti])=>{
+  const srow=srcRows[si].row,trow=targetRowsClone[ti].row;
+  rules.forEach(r=>{
+   const v=getFrom(srow,parsePathKey(r.source));if(v===undefined)return;
+   const tp=parsePathKey(r.target),before=getFrom(trow,tp);
+   setIn(trow,tp,clone(v));
+   changes.push({targetIndex:ti,targetPath:labelPath(tp),before,after:v})
+  })
+ });
+ return {path:ts.p,value:targetClone,pairs:pairIndexes.length,changes}
+}
+function transferPreviewText(r){
+ const sample=r.changes.slice(0,24).map((x,i)=>"#"+(i+1)+" B["+x.targetIndex+"] "+x.targetPath+"\n"+JSON.stringify(x.before)+"\n→ "+JSON.stringify(x.after)).join("\n\n");
+ return "매칭: "+r.pairs+"개 객체\n필드 변경: "+r.changes.length+"개\n적용 위치: "+labelPath(r.path)+"\n\n"+(sample||"변경 예정 항목이 없습니다.")+(r.changes.length>24?"\n\n… "+(r.changes.length-24)+"개 더 있음":"")
+}
+$("#transferSourceInput").onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{transferSourceData=JSON.parse(await f.text());transferSourceName=f.name;transferRules=[{source:"",target:""}];refreshTransferSelectors();toast("소스 파일 A를 불러왔습니다.")}
+ catch(err){alert("A 파일 JSON 파싱 오류:\n"+err.message)}
+};
+$("#transferSourcePath").onchange=()=>renderTransferControls();
+$("#transferTargetPath").onchange=()=>renderTransferControls();
+$("#transferMatchMode").onchange=()=>renderTransferControls();
+$("#addTransferRuleBtn").onclick=()=>{transferRules.push({source:"",target:""});renderTransferRules()};
+$("#previewTransferBtn").onclick=()=>{try{$("#transferPreview").textContent=transferPreviewText(buildTransferResult())}catch(e){alert(e.message)}};
+$("#applyTransferBtn").onclick=()=>{
+ try{
+  const r=buildTransferResult();
+  if(!r.changes.length)return toast("변경할 값이 없습니다.");
+  history("field transfer");
+  setAtPath(r.path,r.value);
+  render();
+  $("#transferPreview").textContent=transferPreviewText(r);
+  toast("Transfer 완료 · "+r.changes.length+"개 필드")
+ }catch(e){alert(e.message)}
+};
+
 function renderTransforms(){const e=$("#transformList");e.innerHTML="";transforms.forEach((t,i)=>{const d=document.createElement("div");d.className="pipelineStep";d.innerHTML=`<div class="stepHd"><strong>단계 ${i+1}</strong></div>`;const s=document.createElement("select");["trim","regexReplace","removeText","prefix","suffix","lower","upper"].forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;s.appendChild(o)});s.value=t.type;s.onchange=()=>{t.type=s.value;renderTransforms()};d.appendChild(s);if(t.type==="regexReplace"){["pattern","replace","flags"].forEach(k=>{const x=document.createElement("input");x.placeholder=k;x.value=t[k]||"";x.oninput=()=>t[k]=x.value;d.appendChild(x)})}else if(["removeText","prefix","suffix"].includes(t.type)){const x=document.createElement("input");x.value=t.text||"";x.oninput=()=>t.text=x.value;d.appendChild(x)}const rm=document.createElement("button");rm.className="mini";rm.textContent="삭제";rm.onclick=()=>{transforms.splice(i,1);renderTransforms()};d.appendChild(rm);e.appendChild(d)})}
 $("#addTransformBtn").onclick=()=>{transforms.push({type:"trim"});renderTransforms()};
 function applyTransforms(v){let s=String(v??"");for(const t of transforms){if(t.type==="trim")s=s.trim();else if(t.type==="regexReplace"){try{s=s.replace(new RegExp(t.pattern||"",t.flags||"g"),t.replace||"")}catch{}}else if(t.type==="removeText")s=s.split(t.text||"").join("");else if(t.type==="prefix")s=(t.text||"")+s;else if(t.type==="suffix")s=s+(t.text||"");else if(t.type==="lower")s=s.toLowerCase();else if(t.type==="upper")s=s.toUpperCase()}return s}
@@ -757,7 +948,7 @@ $("#validateBtn").onclick=()=>toast(data===null?"JSON이 없습니다.":"현재 
 $("#findEmptyBtn").onclick=()=>{if(data===null)return;const r=[];walk(data,[],(v,p)=>{if(v===null||v===""||(Array.isArray(v)&&!v.length)||(v&&typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length))r.push({p,v})});$("#toolsSheet").classList.remove("show");$("#searchResults").innerHTML=r.map(x=>`<div class="result"><strong>${esc(fmtPath(x.p))}</strong></div>`).join("")||'<div class="muted">빈 값 없음</div>'};
 $("#clearSavedBtn").onclick=()=>{if(confirm("저장 규칙을 삭제할까요?")){localStorage.removeItem(LP);localStorage.removeItem(LR);renderSaved()}};
 
-renderTransforms();renderSaved();renderFieldChips();applyTheme(localStorage.getItem("jsonAtelier.theme")||"graphite");render();refreshSchemaSelectors();
+renderTransforms();renderSaved();renderFieldChips();applyTheme(localStorage.getItem("jsonAtelier.theme")||"graphite");render();refreshSchemaSelectors();refreshTransferSelectors();
 })();
 </script>
 </body>
