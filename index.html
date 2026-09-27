@@ -71,7 +71,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .toggle{display:flex;align-items:center;gap:8px}
 .searchbox{display:flex;gap:8px}.searchbox input{flex:1}
 .result{padding:8px 0;border-bottom:1px solid var(--line)}.result:last-child{border-bottom:0}
-.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(6,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(7,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
 .navBtn{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;min-height:48px;padding:6px;font-size:12px}
 .drawer{position:fixed;inset:0;z-index:40;display:none;background:var(--overlay)}.drawer.show{display:flex}
 .sheet{margin-top:auto;width:100%;max-height:88dvh;background:var(--surface);border-radius:14px 14px 0 0;border-top:1px solid var(--line);overflow:auto;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
@@ -106,6 +106,22 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .transferRule{border:1px solid var(--line);border-radius:8px;background:var(--surface2);padding:9px;display:grid;gap:7px}
 .transferArrow{text-align:center;color:var(--muted);font-size:12px}
 .transferMatchBox{display:grid;gap:8px;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface2)}
+.compareToolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.compareStats{margin-left:auto;color:var(--muted);font-size:12px}
+.compareList{display:grid;gap:8px}
+.compareRow{border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden}
+.compareRow.same{opacity:.72}
+.comparePath{padding:8px 10px;border-bottom:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
+.compareSides{display:grid;grid-template-columns:1fr 1fr}
+.compareSide{padding:9px;display:grid;gap:7px;min-width:0}
+.compareSide+ .compareSide{border-left:1px solid var(--line)}
+.compareSideHd{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.compareSideHd strong{color:var(--text);margin-right:auto}
+.compareValue{min-height:42px}
+.compareMissing{border:1px dashed var(--line);border-radius:7px;padding:10px;color:var(--muted);text-align:center}
+.compareActions{display:flex;gap:6px;flex-wrap:wrap}
+.compareActions .mini{min-height:32px;padding:5px 8px}
+@media(max-width:620px){.compareSides{grid-template-columns:1fr}.compareSide+ .compareSide{border-left:0;border-top:1px solid var(--line)}}
 
 .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:var(--surface3);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 13px;display:none;max-width:88vw;text-align:center}.toast.show{display:block}
 .hidden{display:none!important}
@@ -135,7 +151,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 </div></aside></main>
 </div>
 
-<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="transferSheet">Transfer</button><button class="navBtn" data-sheet="savedSheet">저장 규칙</button><button class="navBtn" data-sheet="recipeSheet">Recipe</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
+<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="transferSheet">Transfer</button><button class="navBtn" data-sheet="compareSheet">Compare</button><button class="navBtn" data-sheet="savedSheet">저장 규칙</button><button class="navBtn" data-sheet="recipeSheet">Recipe</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
 
 <div class="drawer" id="fieldViewSheet"><div class="sheet"><div class="sheetHd"><strong>필드만 보기</strong><button class="icon close">×</button></div>
 <div class="section"><div class="muted">선택한 필드만 표시합니다. 여러 필드를 동시에 선택할 수 있습니다.</div>
@@ -247,6 +263,31 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
   </div>
 </div></div>
 
+<div class="drawer" id="compareSheet"><div class="sheet">
+  <div class="sheetHd"><strong>JSON Compare</strong><button class="icon close">×</button></div>
+
+  <div class="section">
+    <div class="schemaStatus"><strong>비교 파일 A</strong><span class="badge" id="compareStatus">불러오지 않음</span></div>
+    <div class="minirow">
+      <label class="btn" style="text-align:center">A 파일 불러오기<input id="compareInput" type="file" accept=".json,application/json" hidden></label>
+      <button class="btn" id="saveCompareABtn">A 저장</button>
+    </div>
+    <div class="muted">오른쪽 B는 현재 JSON입니다. 양쪽 모두 비교 화면에서 바로 편집할 수 있습니다.</div>
+  </div>
+
+  <div class="section">
+    <div class="compareToolbar">
+      <label class="toggle"><input id="compareShowEqual" type="checkbox"> 동일 항목도 표시</label>
+      <input id="compareFilter" type="text" placeholder="경로 검색" style="flex:1;min-width:140px">
+      <span class="compareStats" id="compareStats"></span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div id="compareList" class="compareList"><div class="muted">비교 파일 A를 불러오세요.</div></div>
+  </div>
+</div></div>
+
 <div class="drawer" id="pipelineSheet"><div class="sheet"><div class="sheetHd"><strong>Pipeline</strong><button class="icon close">×</button></div>
 <div class="section">
 <label>적용 범위<select id="scopeMode"><option value="selected">선택한 배열/객체의 모든 항목</option><option value="key">전체 JSON에서 특정 키를 가진 객체</option><option value="path">경로 패턴</option></select></label>
@@ -279,6 +320,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let data=null,fileName="edited.json",selectedScopePath=null,fieldViewFilters=[];
 let schemaTargetData=null,schemaTargetName="",schemaMappings={};
 let transferSourceData=null,transferSourceName="",transferRules=[{source:"",target:""}];
+let compareData=null,compareName="compare-A.json";
 let undoStack=[],redoStack=[],batchDepth=0,batchSnapshot=null,transforms=[{type:"trim"}];
 const clone=x=>structuredClone(x), esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const typeOf=v=>v===null?"null":Array.isArray(v)?"array":typeof v;
@@ -330,7 +372,8 @@ function render(){
  if(has){$("#tree").innerHTML="";if(fieldViewFilters.length&&!subtree(data)){const n=document.createElement("div");n.className="filterNotice";n.textContent="선택 필드를 찾지 못했습니다.";$("#tree").appendChild(n)}else $("#tree").appendChild(renderNode(data,[],"$",true,false))}
  histBtns();renderFieldSuggestions();
  if(typeof refreshSchemaSelectors==="function" && $("#schemaSourcePath")) refreshSchemaSelectors();
- if(typeof refreshTransferSelectors==="function" && $("#transferTargetPath")) refreshTransferSelectors()
+ if(typeof refreshTransferSelectors==="function" && $("#transferTargetPath")) refreshTransferSelectors();
+ if(typeof renderCompare==="function" && $("#compareList")) renderCompare()
 }
 function renderNode(value,path,keyLabel,open=false,force=false){
  const t=typeOf(value);
@@ -789,6 +832,178 @@ $("#schemaApplyBtn").onclick=()=>{
 };
 
 
+
+function setInRoot(root,p,val){
+ if(!p.length)return val;
+ let c=root;
+ for(let i=0;i<p.length-1;i++){
+  const k=p[i],next=p[i+1];
+  if(c[k]==null||typeof c[k]!=="object")c[k]=typeof next==="number"?[]:{};
+  c=c[k]
+ }
+ c[p.at(-1)]=val;return root
+}
+function delInRoot(root,p){
+ if(!p.length)return null;
+ let c=root;
+ for(let i=0;i<p.length-1;i++){if(c==null)return root;c=c[p[i]]}
+ if(c==null)return root;
+ Array.isArray(c)?c.splice(p.at(-1),1):delete c[p.at(-1)];
+ return root
+}
+function compareLeafMap(root){
+ const m=new Map();
+ function rec(v,p=[]){
+  const t=typeOf(v);
+  if(t==="array"){
+   if(!v.length){m.set(pathKey(p),{p,v:[],t});return}
+   v.forEach((x,i)=>rec(x,[...p,i]));return
+  }
+  if(t==="object"){
+   const ks=Object.keys(v);
+   if(!ks.length){m.set(pathKey(p),{p,v:{},t});return}
+   ks.forEach(k=>rec(v[k],[...p,k]));return
+  }
+  m.set(pathKey(p),{p,v,t})
+ }
+ rec(root,[]);
+ return m
+}
+function compareEqual(a,b){
+ if(!a||!b)return false;
+ if(a.t!==b.t)return false;
+ try{return JSON.stringify(a.v)===JSON.stringify(b.v)}catch{return a.v===b.v}
+}
+function compareDisplay(v,t){
+ if(t==="string")return v;
+ if(t==="null")return "null";
+ if(t==="undefined")return "";
+ if(t==="object"||t==="array")return JSON.stringify(v,null,2);
+ return String(v)
+}
+function parseCompareInput(raw,type){
+ if(type==="string")return raw;
+ if(type==="number"){const n=Number(raw);if(Number.isNaN(n))throw new Error("숫자 형식이 아닙니다.");return n}
+ if(type==="boolean"){
+  const s=raw.trim().toLowerCase();if(s==="true")return true;if(s==="false")return false;
+  throw new Error("boolean은 true 또는 false로 입력해주세요.")
+ }
+ if(type==="null"){
+  if(raw.trim()===""||raw.trim()==="null")return null;
+  try{return JSON.parse(raw)}catch{return raw}
+ }
+ if(type==="object"||type==="array"){return JSON.parse(raw)}
+ try{return JSON.parse(raw)}catch{return raw}
+}
+function makeCompareEditor(side,item,path){
+ if(!item){const miss=document.createElement("div");miss.className="compareMissing";miss.textContent="필드 없음";return miss}
+ const long=item.t==="object"||item.t==="array"||item.t==="string"&&(String(item.v).length>80||String(item.v).includes("\n"));
+ const el=document.createElement(long?"textarea":"input");
+ if(!long)el.type="text";
+ el.className="compareValue";
+ el.value=compareDisplay(item.v,item.t);
+ el.onchange=()=>{
+  try{
+   const nv=parseCompareInput(el.value,item.t);
+   if(side==="A"){
+    compareData=setInRoot(compareData,path,nv);
+    renderCompare()
+   }else{
+    history("compare edit");
+    setAtPath(path,nv);
+    render();
+   }
+  }catch(e){alert("값 파싱 오류:\n"+e.message);renderCompare()}
+ };
+ return el
+}
+function compareCopy(fromSide,toSide,path,item){
+ if(!item)return;
+ if(toSide==="A"){
+  compareData=setInRoot(compareData,path,clone(item.v));
+  renderCompare();toast("A에 복사했습니다.")
+ }else{
+  history("compare copy");
+  setAtPath(path,clone(item.v));
+  render();toast("B에 복사했습니다.")
+ }
+}
+function compareDelete(side,path){
+ if(side==="A"){
+  compareData=delInRoot(compareData,path);renderCompare()
+ }else{
+  history("compare delete");delAtPath(path);render()
+ }
+}
+function renderCompare(){
+ const box=$("#compareList");if(!box)return;
+ if(compareData===null||data===null){
+  box.innerHTML='<div class="muted">'+(data===null?"현재 JSON B를 먼저 열어주세요.":"비교 파일 A를 불러오세요.")+'</div>';
+  if($("#compareStats"))$("#compareStats").textContent="";
+  return
+ }
+ const am=compareLeafMap(compareData),bm=compareLeafMap(data),keys=[...new Set([...am.keys(),...bm.keys()])];
+ keys.sort((a,b)=>labelPath(parsePathKey(a)).localeCompare(labelPath(parsePathKey(b)),undefined,{numeric:true}));
+ const showEqual=$("#compareShowEqual")?.checked||false,filter=($("#compareFilter")?.value||"").trim().toLowerCase();
+ let same=0,diff=0,onlyA=0,onlyB=0;
+ const rows=[];
+ keys.forEach(k=>{
+  const a=am.get(k),b=bm.get(k),eq=compareEqual(a,b);
+  if(eq)same++;else if(a&&b)diff++;else if(a)onlyA++;else onlyB++;
+  const path=a?.p||b?.p||parsePathKey(k),label=labelPath(path);
+  if(!showEqual&&eq)return;
+  if(filter&&!label.toLowerCase().includes(filter))return;
+  rows.push({a,b,eq,path,label})
+ });
+ $("#compareStats").textContent="차이 "+diff+" · A만 "+onlyA+" · B만 "+onlyB+" · 동일 "+same;
+ box.innerHTML="";
+ if(!rows.length){box.innerHTML='<div class="muted">표시할 항목이 없습니다.</div>';return}
+ rows.slice(0,1500).forEach(r=>{
+  const row=document.createElement("div");row.className="compareRow"+(r.eq?" same":"");
+  const ph=document.createElement("div");ph.className="comparePath";ph.textContent=r.label;
+  const sides=document.createElement("div");sides.className="compareSides";
+
+  function side(name,item,other){
+   const s=document.createElement("div");s.className="compareSide";
+   const hd=document.createElement("div");hd.className="compareSideHd";
+   const st=document.createElement("strong");st.textContent=name;
+   const typ=document.createElement("span");typ.textContent=item?item.t:"missing";hd.append(st,typ);
+   s.append(hd,makeCompareEditor(name,item,r.path));
+   const act=document.createElement("div");act.className="compareActions";
+   if(item){
+    const cp=document.createElement("button");cp.className="mini";cp.textContent=name==="A"?"A → B":"B → A";
+    cp.onclick=()=>compareCopy(name,name==="A"?"B":"A",r.path,item);
+    const del=document.createElement("button");del.className="mini";del.textContent="삭제";
+    del.onclick=()=>compareDelete(name,r.path);
+    act.append(cp,del)
+   }else if(other){
+    const cp=document.createElement("button");cp.className="mini";cp.textContent=name==="A"?"B → A":"A → B";
+    cp.onclick=()=>compareCopy(name==="A"?"B":"A",name,r.path,other);
+    act.append(cp)
+   }
+   s.appendChild(act);return s
+  }
+
+  sides.append(side("A",r.a,r.b),side("B",r.b,r.a));
+  row.append(ph,sides);box.appendChild(row)
+ });
+ if(rows.length>1500){
+  const n=document.createElement("div");n.className="muted";n.textContent="표시 한도 1500개 · 경로 검색으로 범위를 줄여주세요.";box.appendChild(n)
+ }
+}
+$("#compareInput").onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{compareData=JSON.parse(await f.text());compareName=f.name;$("#compareStatus").textContent=f.name;renderCompare();toast("비교 파일 A를 불러왔습니다.")}
+ catch(err){alert("A 파일 JSON 파싱 오류:\n"+err.message)}
+};
+$("#compareShowEqual").onchange=renderCompare;
+$("#compareFilter").oninput=renderCompare;
+$("#saveCompareABtn").onclick=()=>{
+ if(compareData===null)return toast("비교 파일 A가 없습니다.");
+ const u=URL.createObjectURL(new Blob([JSON.stringify(compareData,null,2)],{type:"application/json"})),a=document.createElement("a");
+ a.href=u;a.download=compareName.replace(/\.json$/i,"")+"-edited.json";a.click();setTimeout(()=>URL.revokeObjectURL(u),500)
+};
+
 function transferScope(root,sel){
  if(!root||!sel)return null;
  const opt=sel.selectedOptions[0];if(!opt||!opt.dataset.path)return null;
@@ -948,7 +1163,7 @@ $("#validateBtn").onclick=()=>toast(data===null?"JSON이 없습니다.":"현재 
 $("#findEmptyBtn").onclick=()=>{if(data===null)return;const r=[];walk(data,[],(v,p)=>{if(v===null||v===""||(Array.isArray(v)&&!v.length)||(v&&typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length))r.push({p,v})});$("#toolsSheet").classList.remove("show");$("#searchResults").innerHTML=r.map(x=>`<div class="result"><strong>${esc(fmtPath(x.p))}</strong></div>`).join("")||'<div class="muted">빈 값 없음</div>'};
 $("#clearSavedBtn").onclick=()=>{if(confirm("저장 규칙을 삭제할까요?")){localStorage.removeItem(LP);localStorage.removeItem(LR);renderSaved()}};
 
-renderTransforms();renderSaved();renderFieldChips();applyTheme(localStorage.getItem("jsonAtelier.theme")||"graphite");render();refreshSchemaSelectors();refreshTransferSelectors();
+renderTransforms();renderSaved();renderFieldChips();applyTheme(localStorage.getItem("jsonAtelier.theme")||"graphite");render();refreshSchemaSelectors();refreshTransferSelectors();renderCompare();
 })();
 </script>
 </body>
