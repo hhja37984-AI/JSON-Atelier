@@ -361,17 +361,31 @@ function collectTargetObjects(root){
  rec(root);
  return out;
 }
+function isPlainObject(v){return !!v&&typeof v==="object"&&!Array.isArray(v)}
+function isArrayOfObjects(v){return Array.isArray(v)&&v.some(isPlainObject)}
+function isObjectMap(v){
+ if(!isPlainObject(v))return false;
+ const vals=Object.values(v);
+ return !!vals.length&&vals.every(isPlainObject)
+}
 function collectSourceScopes(root){
  const out=[];
  function rec(v,p=[]){
-  if(Array.isArray(v)){
-   const objectCount=v.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)).length;
-   if(objectCount)out.push({p,v,label:`${labelPath(p)} · Array (${objectCount} objects)`});
-   v.forEach((x,i)=>rec(x,[...p,i]));
-  }else if(v&&typeof v==="object"){
-   out.push({p,v,label:`${labelPath(p)} · Object (${Object.keys(v).length})`});
-   Object.entries(v).forEach(([k,x])=>rec(x,[...p,k]));
+  if(isArrayOfObjects(v)){
+   const objectCount=v.filter(isPlainObject).length;
+   out.push({p,v,kind:"arrayOfObjects",label:`${labelPath(p)} · Array (${objectCount} objects)`});
+   return;
   }
+  if(isObjectMap(v)){
+   out.push({p,v,kind:"objectMap",label:`${labelPath(p)} · Object (${Object.keys(v).length})`});
+   return;
+  }
+  if(isPlainObject(v)){
+   if(!p.length)out.push({p,v,kind:"rootObject",label:`${labelPath(p)} · Object (${Object.keys(v).length})`});
+   Object.entries(v).forEach(([k,x])=>rec(x,[...p,k]));
+   return;
+  }
+  if(Array.isArray(v))v.forEach((x,i)=>rec(x,[...p,i]));
  }
  rec(root);
  return out;
@@ -454,8 +468,9 @@ function currentSourceScope(){
 }
 function sourceSample(scope){
  if(!scope)return null;
- if(Array.isArray(scope.v))return scope.v.find(x=>x&&typeof x==="object"&&!Array.isArray(x))||null;
- return scope.v&&typeof scope.v==="object"&&!Array.isArray(scope.v)?scope.v:null
+ if(Array.isArray(scope.v))return scope.v.find(isPlainObject)||null;
+ if(isObjectMap(scope.v))return Object.values(scope.v).find(isPlainObject)||null;
+ return isPlainObject(scope.v)?scope.v:null
 }
 function mappingConfig(v){
  if(v&&typeof v==="object"&&!Array.isArray(v))return {
@@ -601,15 +616,28 @@ function buildSchemaConversion(){
  const template=currentTargetTemplate(),scope=currentSourceScope();
  if(!template||!scope)throw new Error("A 기준 객체와 B 변환 범위를 선택해주세요.");
  if(Array.isArray(scope.v)){
-  const converted=scope.v.map(x=>x&&typeof x==="object"&&!Array.isArray(x)?convertOne(x,template):x);
-  return {path:scope.p,value:converted,count:scope.v.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)).length}
+  const converted=scope.v.map(x=>isPlainObject(x)?convertOne(x,template):x);
+  return {path:scope.p,value:converted,count:scope.v.filter(isPlainObject).length}
  }
- if(scope.v&&typeof scope.v==="object"&&!Array.isArray(scope.v))return {path:scope.p,value:convertOne(scope.v,template),count:1};
+ if(isObjectMap(scope.v)){
+  const converted={};
+  for(const [k,x] of Object.entries(scope.v))converted[k]=isPlainObject(x)?convertOne(x,template):x;
+  return {path:scope.p,value:converted,count:Object.values(scope.v).filter(isPlainObject).length}
+ }
+ if(isPlainObject(scope.v))return {path:scope.p,value:convertOne(scope.v,template),count:1};
  throw new Error("B 범위는 객체 또는 객체 배열이어야 합니다.")
 }
 function schemaPreviewText(result){
- const show=Array.isArray(result.value)?result.value.slice(0,3):result.value;
- return `변환 예정: ${result.count}개\n적용 위치: ${labelPath(result.path)}\n\n${JSON.stringify(show,null,2)}${Array.isArray(result.value)&&result.value.length>3?`\n\n… ${result.value.length-3}개 더 있음`:""}`
+ let show=result.value,extra="";
+ if(Array.isArray(result.value)){
+  show=result.value.slice(0,3);
+  if(result.value.length>3)extra=`\n\n… ${result.value.length-3}개 더 있음`;
+ }else if(isObjectMap(result.value)){
+  const es=Object.entries(result.value);
+  show=Object.fromEntries(es.slice(0,3));
+  if(es.length>3)extra=`\n\n… ${es.length-3}개 더 있음`;
+ }
+ return `변환 예정: ${result.count}개\n적용 위치: ${labelPath(result.path)}\n\n${JSON.stringify(show,null,2)}${extra}`
 }
 $("#schemaTargetInput").onchange=async e=>{
  const f=e.target.files[0];if(!f)return;
