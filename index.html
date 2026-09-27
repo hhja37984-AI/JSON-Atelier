@@ -10,7 +10,7 @@
   --bg:#17191b;--surface:#202326;--surface2:#2a2e32;--surface3:#262a2e;--input:#17191b;
   --text:#e4e7ea;--muted:#a7adb4;--line:#454a50;--control:#747b83;
   --accent:#69737d;--on:#fff;--danger:#915b62;--chip:#30353a;--warn:#c58c92;
-  --radius:9px;--font:15px;--overlay:rgba(4,5,6,.78)
+  --radius:9px;--font:15px;--overlay:rgba(4,5,6,.78);--compare-a:#915b62
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font:500 var(--font)/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -114,9 +114,12 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .comparePath{padding:8px 10px;border-bottom:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
 .compareSides{display:grid;grid-template-columns:1fr 1fr}
 .compareSide{padding:9px;display:grid;gap:7px;min-width:0}
+.compareSide[data-side="A"]{background:color-mix(in srgb,var(--compare-a) 14%,var(--surface2))}
+.compareSide[data-side="A"] .compareSideHd strong{color:var(--compare-a)}
 .compareSide+ .compareSide{border-left:1px solid var(--line)}
 .compareSideHd{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
 .compareSideHd strong{color:var(--text);margin-right:auto}
+.compareAChar{color:var(--compare-a);font-weight:900}
 .compareValue{min-height:42px}
 .compareMissing{border:1px dashed var(--line);border-radius:7px;padding:10px;color:var(--muted);text-align:center}
 .compareActions{display:flex;gap:6px;flex-wrap:wrap}
@@ -345,9 +348,18 @@ cocoa:["#1b1715","#251f1c","#312926","#2b2421","#1b1715","#d8cdc6","#a8978f","#3
 cherry:["#ebe0de","#fffcf4","#eeefed","#f7f1e8","#fffdf7","#2a2227","#525a56","#c0c2c1","#6a555c","#6c0e15","#f5ece7","#963a43","#eae9d6"],
 crush:["#1e1e1f","#474243","#28393c","#353738","#202324","#d2c7c4","#a99f9f","#435559","#65767a","#5c5453","#e8dedb","#8f565c","#5d585a"]
 };
+const COMPAREA={
+ graphite:"#915b62",
+ ivory:"#9b5057",
+ kitty:"#3d74d8",
+ latte:"#8839ef",
+ cocoa:"#a86573",
+ cherry:"#963a43",
+ crush:"#ac6f6f"
+};
 function applyTheme(id){
  const t=THEMES.find(x=>x.id===id)||THEMES[0],v=THEMEV[t.id],n=["--bg","--surface","--surface2","--surface3","--input","--text","--muted","--line","--control","--accent","--on","--danger","--chip"];
- n.forEach((k,i)=>document.documentElement.style.setProperty(k,v[i]));document.documentElement.style.colorScheme=t.scheme;localStorage.setItem("jsonAtelier.theme",t.id);renderThemes();
+ n.forEach((k,i)=>document.documentElement.style.setProperty(k,v[i]));document.documentElement.style.setProperty("--compare-a",COMPAREA[t.id]||v[11]||v[9]);document.documentElement.style.colorScheme=t.scheme;localStorage.setItem("jsonAtelier.theme",t.id);renderThemes();
 }
 function renderThemes(){const g=$("#themeGrid");if(!g)return;const cur=localStorage.getItem("jsonAtelier.theme")||"graphite";g.innerHTML="";THEMES.forEach(t=>{const b=document.createElement("button");b.className="themeChoice"+(t.id===cur?" active":"");b.innerHTML=`<span class="themeName">${t.name}</span><span class="swatches">${t.s.map(c=>`<span class="swatch" style="background:${c}"></span>`).join("")}</span>`;b.onclick=()=>applyTheme(t.id);g.appendChild(b)});$("#themeBadge").textContent=(THEMES.find(x=>x.id===cur)||THEMES[0]).name}
 
@@ -964,20 +976,20 @@ function renderCompare(){
   const sides=document.createElement("div");sides.className="compareSides";
 
   function side(name,item,other){
-   const s=document.createElement("div");s.className="compareSide";
+   const s=document.createElement("div");s.className="compareSide";s.dataset.side=name;
    const hd=document.createElement("div");hd.className="compareSideHd";
    const st=document.createElement("strong");st.textContent=name;
    const typ=document.createElement("span");typ.textContent=item?item.t:"missing";hd.append(st,typ);
    s.append(hd,makeCompareEditor(name,item,r.path));
    const act=document.createElement("div");act.className="compareActions";
    if(item){
-    const cp=document.createElement("button");cp.className="mini";cp.textContent=name==="A"?"A → B":"B → A";
+    const cp=document.createElement("button");cp.className="mini";cp.innerHTML=name==="A"?'<span class="compareAChar">A</span> → B':'B → <span class="compareAChar">A</span>';
     cp.onclick=()=>compareCopy(name,name==="A"?"B":"A",r.path,item);
     const del=document.createElement("button");del.className="mini";del.textContent="삭제";
     del.onclick=()=>compareDelete(name,r.path);
     act.append(cp,del)
    }else if(other){
-    const cp=document.createElement("button");cp.className="mini";cp.textContent=name==="A"?"B → A":"A → B";
+    const cp=document.createElement("button");cp.className="mini";cp.innerHTML=name==="A"?'B → <span class="compareAChar">A</span>':'<span class="compareAChar">A</span> → B';
     cp.onclick=()=>compareCopy(name==="A"?"B":"A",name,r.path,other);
     act.append(cp)
    }
