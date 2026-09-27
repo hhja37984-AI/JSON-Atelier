@@ -390,7 +390,25 @@ function collectSourceScopes(root){
  rec(root);
  return out;
 }
-function getFrom(root,p){let c=root;for(const k of p){if(c==null)return undefined;c=c[k]}return c}
+function getFrom(root,p){
+ function rec(c,i){
+  if(i>=p.length)return c;
+  if(c==null)return undefined;
+  const k=p[i];
+  if(k==="*"){
+   const vals=Array.isArray(c)?c:(isPlainObject(c)?Object.values(c):[]);
+   const out=[];
+   vals.forEach(v=>{
+    const r=rec(v,i+1);
+    if(r===undefined)return;
+    if(Array.isArray(r))out.push(...r);else out.push(r)
+   });
+   return out
+  }
+  return rec(c[k],i+1)
+ }
+ return rec(root,0)
+}
 function setIn(root,p,val){
  if(!p.length)return val;
  let c=root;
@@ -404,8 +422,22 @@ function setIn(root,p,val){
 function leafEntries(v,p=[]){
  const out=[];
  function rec(x,q){
-  if(Array.isArray(x)){out.push({p:q,v:x,t:"array",name:String(q.at(-1)??"$")});return}
-  if(isObjectMap(x)){out.push({p:q,v:x,t:"object",name:String(q.at(-1)??"$")});return}
+  if(isArrayOfObjects(x)){
+   const sample=x.find(isPlainObject);
+   if(sample)rec(sample,[...q,"*"]);
+   else out.push({p:q,v:x,t:"array",name:String(q.at(-1)??"$")});
+   return
+  }
+  if(isObjectMap(x)){
+   const sample=Object.values(x).find(isPlainObject);
+   if(sample)rec(sample,[...q,"*"]);
+   else out.push({p:q,v:x,t:"object",name:String(q.at(-1)??"$")});
+   return
+  }
+  if(Array.isArray(x)){
+   out.push({p:q,v:x,t:"array",name:String(q.at(-1)??"$")});
+   return
+  }
   if(x&&typeof x==="object"){
    const keys=Object.keys(x);
    if(!keys.length){out.push({p:q,v:x,t:"object",name:String(q.at(-1)??"$")});return}
