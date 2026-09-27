@@ -405,6 +405,7 @@ function leafEntries(v,p=[]){
  const out=[];
  function rec(x,q){
   if(Array.isArray(x)){out.push({p:q,v:x,t:"array",name:String(q.at(-1)??"$")});return}
+  if(isObjectMap(x)){out.push({p:q,v:x,t:"object",name:String(q.at(-1)??"$")});return}
   if(x&&typeof x==="object"){
    const keys=Object.keys(x);
    if(!keys.length){out.push({p:q,v:x,t:"object",name:String(q.at(-1)??"$")});return}
