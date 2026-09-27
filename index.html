@@ -645,9 +645,56 @@ function convertOne(source,template){
  if($("#schemaKeepExtras").checked)mergeExtras(out,source);
  return out
 }
+function wildcardAxis(){
+ const axes=[];
+ for(const raw of Object.values(schemaMappings)){
+  const cfg=mappingConfig(raw);if(!cfg.source)continue;
+  const p=parsePathKey(cfg.source),i=p.indexOf("*");
+  if(i<0)continue;
+  axes.push(p.slice(0,i))
+ }
+ if(!axes.length)return null;
+ const first=pathKey(axes[0]);
+ if(axes.some(x=>pathKey(x)!==first))throw new Error("서로 다른 반복 컬렉션의 * 필드를 한 변환에 함께 사용할 수 없습니다.");
+ return axes[0]
+}
+function collectionRows(v){
+ if(Array.isArray(v))return v.filter(isPlainObject);
+ if(isPlainObject(v))return Object.values(v).filter(isPlainObject);
+ return[]
+}
+function convertWildcardRow(row,root,axis,template){
+ const out=makeTargetBase(template,$("#schemaKeepDefaults").checked);
+ for(const [tk,raw] of Object.entries(schemaMappings)){
+  const cfg=mappingConfig(raw);if(!cfg.source)continue;
+  const p=parsePathKey(cfg.source),star=p.indexOf("*");
+  let v;
+  if(star>=0){
+   const ownAxis=p.slice(0,star);
+   if(pathKey(ownAxis)!==pathKey(axis))continue;
+   v=getFrom(row,p.slice(star+1))
+  }else{
+   v=getFrom(root,p)
+  }
+  if(v===undefined)continue;
+  if(cfg.mode==="lookup")v=resolveLookupValue(v,cfg);
+  if(v!==undefined)setIn(out,parsePathKey(tk),clone(v))
+ }
+ if($("#schemaKeepExtras").checked)mergeExtras(out,row);
+ return out
+}
 function buildSchemaConversion(){
  const template=currentTargetTemplate(),scope=currentSourceScope();
  if(!template||!scope)throw new Error("A 기준 객체와 B 변환 범위를 선택해주세요.");
+
+ const axis=wildcardAxis();
+ if(axis){
+  const collection=getFrom(scope.v,axis),rows=collectionRows(collection);
+  if(!rows.length)throw new Error("* 반복 경로에서 변환할 객체를 찾지 못했습니다.");
+  const converted=rows.map(row=>convertWildcardRow(row,scope.v,axis,template));
+  return {path:scope.p,value:converted,count:converted.length}
+ }
+
  if(Array.isArray(scope.v)){
   const converted=scope.v.map(x=>isPlainObject(x)?convertOne(x,template):x);
   return {path:scope.p,value:converted,count:scope.v.filter(isPlainObject).length}
