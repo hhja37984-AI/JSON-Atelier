@@ -71,7 +71,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .toggle{display:flex;align-items:center;gap:8px}
 .searchbox{display:flex;gap:8px}.searchbox input{flex:1}
 .result{padding:8px 0;border-bottom:1px solid var(--line)}.result:last-child{border-bottom:0}
-.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(7,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.bottomNav{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);gap:7px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
 .navBtn{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;min-height:48px;padding:6px;font-size:12px}
 .drawer{position:fixed;inset:0;z-index:40;display:none;background:var(--overlay)}.drawer.show{display:flex}
 .sheet{margin-top:auto;width:100%;max-height:88dvh;background:var(--surface);border-radius:14px 14px 0 0;border-top:1px solid var(--line);overflow:auto;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
@@ -129,7 +129,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:var(--surface3);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 13px;display:none;max-width:88vw;text-align:center}.toast.show{display:block}
 .hidden{display:none!important}
 @media(max-width:520px){.children{margin-left:9px;padding-left:10px;width:calc(100% - 9px)}details.node>summary{padding-left:9px;padding-right:9px}}
-@media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.bottomNav{left:auto;width:420px;right:16px;border:1px solid var(--line);border-radius:10px 10px 0 0}}
+@media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.bottomNav{left:auto;width:360px;right:16px;border:1px solid var(--line);border-radius:10px 10px 0 0}}
 </style>
 </head>
 <body>
@@ -154,7 +154,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 </div></aside></main>
 </div>
 
-<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="transferSheet">Transfer</button><button class="navBtn" data-sheet="compareSheet">Compare</button><button class="navBtn" data-sheet="savedSheet">저장 규칙</button><button class="navBtn" data-sheet="recipeSheet">Recipe</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
+<nav class="bottomNav"><button class="navBtn" data-sheet="pipelineSheet">Pipeline</button><button class="navBtn" data-sheet="schemaSheet">Schema</button><button class="navBtn" data-sheet="transferSheet">Transfer</button><button class="navBtn" data-sheet="compareSheet">Compare</button><button class="navBtn" data-sheet="toolsSheet">도구</button></nav>
 
 <div class="drawer" id="fieldViewSheet"><div class="sheet"><div class="sheetHd"><strong>필드만 보기</strong><button class="icon close">×</button></div>
 <div class="section"><div class="muted">선택한 필드만 표시합니다. 여러 필드를 동시에 선택할 수 있습니다.</div>
@@ -301,13 +301,20 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 <div class="grid2"><label>Flags<input id="regexFlags" type="text" value="m"></label><label>Capture<input id="captureGroup" type="number" min="0" value="1"></label></div>
 <label class="toggle"><input id="removeMatch" type="checkbox" checked> 소스에서 전체 match 제거</label></div>
 <div class="section"><div style="display:flex;align-items:center"><strong style="margin-right:auto">Transform 단계</strong><button class="btn" id="addTransformBtn">+ 추가</button></div><div id="transformList"></div></div>
-<div class="section"><div class="minirow"><button class="btn" id="previewPipelineBtn">미리보기</button><button class="btn primary" id="applyPipelineBtn">적용</button><button class="btn" id="savePipelineBtn">Pipeline 저장</button></div><div id="pipelinePreview" class="preview">아직 미리보기가 없습니다.</div></div>
-</div></div>
-
-<div class="drawer" id="savedSheet"><div class="sheet"><div class="sheetHd"><strong>저장된 Pipeline</strong><button class="icon close">×</button></div><div class="section" id="savedPipelines"></div></div></div>
-
-<div class="drawer" id="recipeSheet"><div class="sheet"><div class="sheetHd"><strong>Recipe</strong><button class="icon close">×</button></div>
-<div class="section"><div class="muted">저장된 Pipeline 여러 개를 순서대로 묶어 실행합니다. Recipe 전체가 Undo 한 단계입니다.</div><input id="recipeName" type="text" placeholder="Recipe 이름"><div id="recipeChecks"></div><button class="btn" id="saveRecipeBtn">Recipe 저장</button></div><div class="section" id="savedRecipes"></div>
+<div class="section"><div class="minirow"><button class="btn" id="previewPipelineBtn">미리보기</button><button class="btn primary" id="applyPipelineBtn">적용</button><button class="btn" id="savePipelineBtn">현재 Pipeline 저장</button></div><div id="pipelinePreview" class="preview">아직 미리보기가 없습니다.</div></div>
+<div class="section">
+  <div style="display:flex;align-items:center;gap:8px"><strong style="margin-right:auto">저장된 Pipeline</strong><span class="badge">프리셋</span></div>
+  <div class="muted">자주 쓰는 Pipeline 설정을 저장하고 현재 작업 공간으로 다시 불러옵니다.</div>
+  <div id="savedPipelines"></div>
+</div>
+<div class="section">
+  <div style="display:flex;align-items:center;gap:8px"><strong style="margin-right:auto">Recipe</strong><span class="badge">Pipeline 묶음</span></div>
+  <div class="muted">저장된 Pipeline 여러 개를 순서대로 묶어 실행합니다. Recipe 전체가 Undo 한 단계입니다.</div>
+  <input id="recipeName" type="text" placeholder="Recipe 이름">
+  <div id="recipeChecks"></div>
+  <button class="btn" id="saveRecipeBtn">Recipe 저장</button>
+  <div id="savedRecipes"></div>
+</div>
 </div></div>
 
 <div class="drawer" id="toolsSheet"><div class="sheet"><div class="sheetHd"><strong>도구</strong><button class="icon close">×</button></div>
@@ -1169,7 +1176,7 @@ $("#applyPipelineBtn").onclick=()=>{if(data===null)return;begin("pipeline");try{
 
 const LP="jsonAtelier.pipelines",LR="jsonAtelier.recipes",loadP=()=>JSON.parse(localStorage.getItem(LP)||"[]"),saveP=x=>localStorage.setItem(LP,JSON.stringify(x)),loadR=()=>JSON.parse(localStorage.getItem(LR)||"[]"),saveR=x=>localStorage.setItem(LR,JSON.stringify(x));
 $("#savePipelineBtn").onclick=()=>{const n=prompt("Pipeline 이름");if(!n)return;const a=loadP();a.push({name:n,source:$("#sourceField").value,target:$("#targetField").value,regex:$("#extractRegex").value,flags:$("#regexFlags").value,capture:$("#captureGroup").value,remove:$("#removeMatch").checked,transforms:clone(transforms)});saveP(a);renderSaved()};
-function renderSaved(){const a=loadP(),e=$("#savedPipelines");e.innerHTML=a.length?"":'<div class="muted">저장된 Pipeline이 없습니다.</div>';a.forEach((p,i)=>{const d=document.createElement("div");d.className="card";d.style.borderRight="1px solid var(--line)";d.innerHTML=`<strong>${esc(p.name)}</strong>`;const u=document.createElement("button");u.className="btn";u.textContent="불러오기";u.onclick=()=>{$("#sourceField").value=p.source;$("#targetField").value=p.target;$("#extractRegex").value=p.regex;$("#regexFlags").value=p.flags;$("#captureGroup").value=p.capture;$("#removeMatch").checked=p.remove;transforms=clone(p.transforms);renderTransforms();$("#savedSheet").classList.remove("show");$("#pipelineSheet").classList.add("show")};const x=document.createElement("button");x.className="btn danger";x.textContent="삭제";x.onclick=()=>{const z=loadP();z.splice(i,1);saveP(z);renderSaved()};d.append(u,x);e.appendChild(d)})}
+function renderSaved(){const a=loadP(),e=$("#savedPipelines");e.innerHTML=a.length?"":'<div class="muted">저장된 Pipeline이 없습니다.</div>';a.forEach((p,i)=>{const d=document.createElement("div");d.className="card";d.style.borderRight="1px solid var(--line)";d.innerHTML=`<strong>${esc(p.name)}</strong>`;const u=document.createElement("button");u.className="btn";u.textContent="불러오기";u.onclick=()=>{$("#sourceField").value=p.source;$("#targetField").value=p.target;$("#extractRegex").value=p.regex;$("#regexFlags").value=p.flags;$("#captureGroup").value=p.capture;$("#removeMatch").checked=p.remove;transforms=clone(p.transforms);renderTransforms();toast("Pipeline을 불러왔습니다.")};const x=document.createElement("button");x.className="btn danger";x.textContent="삭제";x.onclick=()=>{const z=loadP();z.splice(i,1);saveP(z);renderSaved()};d.append(u,x);e.appendChild(d)})}
 $("#saveRecipeBtn").onclick=()=>toast("Recipe는 다음 튜닝 때 더 다듬을 예정입니다.");
 $("#validateBtn").onclick=()=>toast(data===null?"JSON이 없습니다.":"현재 데이터 구조는 유효합니다.");
 $("#findEmptyBtn").onclick=()=>{if(data===null)return;const r=[];walk(data,[],(v,p)=>{if(v===null||v===""||(Array.isArray(v)&&!v.length)||(v&&typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length))r.push({p,v})});$("#toolsSheet").classList.remove("show");$("#searchResults").innerHTML=r.map(x=>`<div class="result"><strong>${esc(fmtPath(x.p))}</strong></div>`).join("")||'<div class="muted">빈 값 없음</div>'};
