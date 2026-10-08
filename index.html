@@ -193,11 +193,35 @@
 
 <div class="drawer" id="toolsSheet"><div class="sheet"><div class="sheetHd"><strong>도구</strong><button class="icon close">×</button></div>
 <div class="section"><div style="display:flex;align-items:center;gap:8px"><strong style="margin-right:auto">컬러 팔레트</strong><span class="badge" id="themeBadge">Graphite</span></div><div id="themeGrid" class="themeGrid"></div></div>
-<div class="section"><button class="btn" id="validateBtn">JSON 검증</button><button class="btn" id="findEmptyBtn">빈 값 / null 찾기</button><button class="btn danger" id="clearSavedBtn">저장된 Pipeline/Recipe 삭제</button></div>
+<div class="section"><button class="btn" id="frequencyBtn">반복 구문 분석</button><button class="btn" id="validateBtn">JSON 검증</button><button class="btn" id="findEmptyBtn">빈 값 / null 찾기</button><button class="btn danger" id="clearSavedBtn">저장된 Pipeline/Recipe 삭제</button></div>
 </div></div>
 
+
+<div class="drawer" id="frequencySheet"><div class="sheet frequencySheet">
+<div class="sheetHd"><strong>반복 구문 분석</strong><button class="icon close">×</button></div>
+<div class="section">
+ <div class="muted">엔트리 사이에 반복되는 구문을 찾습니다. 분석만 수행하며 JSON은 수정하지 않습니다.</div>
+ <div id="frequencyFieldStatus" class="freqFieldStatus"></div>
+ <button class="btn" id="frequencyChangeFields">분석 필드 선택 · 변경</button>
+</div>
+<div class="section">
+ <div class="grid2"><label>최소 단어 수<input id="frequencyMinWords" type="number" min="2" max="8" value="3"></label>
+ <label>최대 단어 수<input id="frequencyMaxWords" type="number" min="2" max="8" value="6"></label></div>
+ <label>최소 중복 엔트리 수<input id="frequencyMinEntries" type="number" min="2" max="9999" value="2"></label>
+ <label class="toggle"><input id="frequencyIncludeInternal" type="checkbox">한 엔트리 내부에서만 반복되는 구문도 포함</label>
+ <button class="btn primary" id="frequencyRunBtn">분석하기</button>
+ <div id="frequencySummary" class="muted"></div><div id="frequencyStatus" class="muted" role="status"></div>
+</div>
+<div class="section">
+ <div class="grid2"><input id="frequencySearch" type="text" placeholder="결과 내 구문 검색" aria-label="반복 구문 검색">
+ <select id="frequencySort" aria-label="정렬 기준"><option value="entries">엔트리 수 우선</option><option value="occurrences">출현 횟수 우선</option><option value="length">긴 구문 우선</option></select></div>
+ <div id="frequencyResults" class="freqResults"></div>
+ <button id="frequencyMore" class="btn" hidden>더 보기</button>
+</div>
+</div></div>
 <div class="toast" id="toast"></div>
 
+<script src="frequency.js"></script>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -278,7 +302,7 @@ function renderNode(value,path,keyLabel,open=false,force=false){
   Object.entries(value).forEach(([k,v])=>{const kp=t==="array"?Number(k):k,exact=t==="object"&&selectedKey(k);let show=true;if(fieldViewFilters.length&&!force)show=t==="array"?subtree(v):(exact||subtree(v));if(show)ch.appendChild(renderNode(v,[...path,kp],String(k),false,force||exact))});
   d.appendChild(ch);return d
  }
- const c=document.createElement("div");c.className="card";
+ const c=document.createElement("div");c.className="card";c.dataset.jsonPath=JSON.stringify(path);
  const h=document.createElement("div");h.className="rowHead";h.innerHTML=`<div class="k">${esc(keyLabel)}</div><div class="path">${esc(fmtPath(path))}</div>`;
  if(!fieldViewFilters.length){const x=document.createElement("button");x.className="mini";x.textContent="삭제";x.onclick=()=>{history("delete");delAtPath(path);render()};h.appendChild(x)}c.appendChild(h);
  const f=document.createElement("div");f.className="field",key=String(path.at(-1)||"").toLowerCase();
@@ -1056,6 +1080,123 @@ $("#validateBtn").onclick=()=>toast(data===null?"JSON이 없습니다.":"현재 
 $("#findEmptyBtn").onclick=()=>{if(data===null)return;const r=[];walk(data,[],(v,p)=>{if(v===null||v===""||(Array.isArray(v)&&!v.length)||(v&&typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length))r.push({p,v})});$("#toolsSheet").classList.remove("show");$("#searchResults").innerHTML=r.map(x=>`<div class="result"><strong>${esc(fmtPath(x.p))}</strong></div>`).join("")||'<div class="muted">빈 값 없음</div>'};
 $("#clearSavedBtn").onclick=()=>{if(confirm("저장 규칙을 삭제할까요?")){localStorage.removeItem(LP);localStorage.removeItem(LR);renderSaved()}};
 
+function initFrequencyUI(){
+ let report=null,openedPhrase=null,visibleCount=60,shownOccurrences=new Map();
+ const sheet=$("#frequencySheet"),list=$("#frequencyResults"),status=$("#frequencyStatus"),summary=$("#frequencySummary");
+ function fieldInfo(){
+  const names=fieldViewFilters;
+  $("#frequencyFieldStatus").textContent=names.length?"현재 필드만 보기: "+names.join(", "):"분석 대상이 없습니다. 먼저 '필드만 보기'에서 문자열 필드를 선택하세요.";
+  $("#frequencyRunBtn").disabled=data===null||!names.length;
+ }
+ function markOptionsChanged(){
+  if(report)status.textContent="설정이 변경됐습니다. '분석하기'를 눌러 결과를 갱신하세요.";
+ }
+ function jumpTo(o){
+  sheet.classList.remove("show");
+  const target=JSON.stringify(o.path);
+  let card=[...document.querySelectorAll("#tree .card[data-json-path]")].find(x=>x.dataset.jsonPath===target);
+  if(!card){render();card=[...document.querySelectorAll("#tree .card[data-json-path]")].find(x=>x.dataset.jsonPath===target);}
+  if(!card){toast("원본 위치를 찾지 못했습니다.");return;}
+  let parent=card.parentElement;
+  while(parent){if(parent.tagName==="DETAILS")parent.open=true;parent=parent.parentElement;}
+  card.classList.add("freqJump");
+  const control=card.querySelector("textarea,input[type=text]");
+  requestAnimationFrame(()=>{
+   card.scrollIntoView({behavior:"smooth",block:"center"});
+   if(control){
+    control.focus({preventScroll:true});
+    if(typeof control.setSelectionRange==="function")control.setSelectionRange(o.start,o.end);
+   }
+  });
+  setTimeout(()=>card.classList.remove("freqJump"),2400);
+ }
+ function excerpt(o){
+  const raw=getAtPath(o.path);
+  if(typeof raw!=="string")return "<span class=\"muted\">현재 원문을 찾을 수 없습니다.</span>";
+  const from=Math.max(0,o.start-68),to=Math.min(raw.length,o.end+68);
+  return (from?"…":"")+esc(raw.slice(from,o.start))+"<mark>"+esc(raw.slice(o.start,o.end))+"</mark>"+esc(raw.slice(o.end,to))+(to<raw.length?"…":"");
+ }
+ function renderList(){
+  list.innerHTML="";
+  if(!report){list.innerHTML='<div class="muted">분석 실행 후 반복 구문이 표시됩니다.</div>';$("#frequencyMore").hidden=true;return;}
+  const query=$("#frequencySearch").value.trim().toLocaleLowerCase("en");
+  const sort=$("#frequencySort").value;
+  const rows=report.items.filter(x=>x.phrase.includes(query));
+  rows.sort((a,b)=>{
+   if(sort==="occurrences")return b.count-a.count||b.entries-a.entries||b.words-a.words;
+   if(sort==="length")return b.words-a.words||b.entries-a.entries||b.count-a.count;
+   return b.entries-a.entries||b.count-a.count||b.words-a.words;
+  });
+  if(!rows.length){list.innerHTML='<div class="muted">조건에 맞는 반복 구문이 없습니다.</div>';$("#frequencyMore").hidden=true;return;}
+  const fragment=document.createDocumentFragment();
+  rows.slice(0,visibleCount).forEach(item=>{
+   const container=document.createElement("div");container.className="freqRow";
+   const active=openedPhrase===item.phrase;
+   const button=document.createElement("button");button.type="button";button.className="freqRowBtn";
+   button.setAttribute("aria-expanded",String(active));
+   button.innerHTML='<span class="freqPhrase">'+esc(item.phrase)+'</span><span class="freqCounts">'+item.entries+'개 엔트리 · '+item.count+'회 <span class="freqCaret">'+(active?"⌃":"⌄")+"</span></span>";
+   button.onclick=()=>{openedPhrase=active?null:item.phrase;renderList();};
+   container.appendChild(button);
+   if(active){
+    const hits=document.createElement("div");hits.className="freqHits";
+    const limit=shownOccurrences.get(item.phrase)||8;
+    item.occurrences.slice(0,limit).forEach(o=>{
+     const hit=document.createElement("div");hit.className="freqHit";
+     const hd=document.createElement("div");hd.className="freqHitHeader";
+     const path=document.createElement("span");path.className="freqPath";path.textContent=fmtPath(o.path);
+     const go=document.createElement("button");go.className="mini";go.textContent="원본 편집";go.onclick=()=>jumpTo(o);
+     hd.append(path,go);
+     const context=document.createElement("div");context.className="freqExcerpt";context.innerHTML=excerpt(o);
+     hit.append(hd,context);hits.appendChild(hit);
+    });
+    if(item.occurrences.length>limit){
+     const more=document.createElement("button");more.className="btn";more.textContent="출현 위치 더 보기 ("+(item.occurrences.length-limit)+"건 남음)";
+     more.onclick=()=>{shownOccurrences.set(item.phrase,limit+12);renderList();};
+     hits.appendChild(more);
+    }
+    container.appendChild(hits);
+   }
+   fragment.appendChild(container);
+  });
+  list.appendChild(fragment);
+  $("#frequencyMore").hidden=rows.length<=visibleCount;
+  $("#frequencyMore").textContent="더 보기 ("+Math.min(60,rows.length-visibleCount)+"개)";
+ }
+ function run(){
+  fieldInfo();
+  if(data===null||!fieldViewFilters.length){toast("분석할 필드를 선택해주세요.");return;}
+  status.textContent="분석 중…";
+  requestAnimationFrame(()=>{
+   try{
+    report=window.PhraseFrequency.analyze(data,fieldViewFilters,{
+     minWords:Number($("#frequencyMinWords").value),
+     maxWords:Number($("#frequencyMaxWords").value),
+     minEntries:Number($("#frequencyMinEntries").value),
+     includeInternal:$("#frequencyIncludeInternal").checked
+    });
+    openedPhrase=null;visibleCount=60;shownOccurrences.clear();
+    summary.textContent=report.entries+"개 엔트리 · "+report.fields+"개 문자열 필드 · "+report.tokens.toLocaleString()+"단어";
+    status.textContent=report.items.length+"개 반복 구문"
+     +(report.truncated?" · 12만 단어까지만 분석했습니다.":"")
+     +(report.limited?" · 상위 3,500개 후보만 검토했습니다.":"");
+    renderList();
+   }catch(err){report=null;summary.textContent="";status.textContent="분석 오류: "+err.message;renderList();}
+  });
+ }
+ $("#frequencyBtn").onclick=()=>{
+  $("#toolsSheet").classList.remove("show");
+  sheet.classList.add("show");
+  fieldInfo();if(data!==null&&fieldViewFilters.length)run();else{report=null;summary.textContent="";status.textContent="";renderList();}
+ };
+ $("#frequencyChangeFields").onclick=()=>{sheet.classList.remove("show");$("#fieldViewSheet").classList.add("show");renderFieldSuggestions();};
+ $("#frequencyRunBtn").onclick=run;
+ $("#frequencySearch").oninput=()=>{visibleCount=60;renderList();};
+ $("#frequencySort").onchange=renderList;
+ $("#frequencyMore").onclick=()=>{visibleCount+=60;renderList();};
+ ["#frequencyMinWords","#frequencyMaxWords","#frequencyMinEntries","#frequencyIncludeInternal"].forEach(sel=>$(sel).onchange=markOptionsChanged);
+ renderList();
+}
+initFrequencyUI();
 renderTransforms();renderSaved();renderFieldChips();applyTheme(localStorage.getItem("jsonAtelier.theme")||"graphite");render();refreshSchemaSelectors();refreshTransferSelectors();renderCompare();
 })();
 </script>
