@@ -571,7 +571,7 @@ function refreshSchemaSelectors(){
  sa.innerHTML="";
  if(data===null){sa.innerHTML='<option>현재 JSON을 먼저 여세요</option>';$("#schemaSourceStatus").textContent="현재 JSON 없음"}
  else{
-  const opts=collectTargetObjects(data);
+  const opts=collectSourceScopes(data);
   opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if(i===0)o.selected=true;sa.appendChild(o)});
   $("#schemaSourceStatus").textContent=fileName.replace(/-edited\.json$/,"");
  }
@@ -580,7 +580,7 @@ function refreshSchemaSelectors(){
 function renderSchemaMappings(auto=false){
  const box=$("#schemaMappingList"),template=currentTargetTemplate(),scope=currentSourceScope(),sample=sourceSample(scope);
  if(!template||!sample){box.innerHTML='<div class="muted">A와 B의 범위를 선택하면 매핑 후보가 표시됩니다.</div>';return}
- const targets=structureEntries(template),sources=structureEntries(sample,true),lookups=collectLookupTables(data);
+ const targets=leafEntries(template),sources=leafEntries(sample),lookups=collectLookupTables(data);
  if(auto)schemaMappings={};
  box.innerHTML="";
  targets.forEach(t=>{
@@ -631,17 +631,6 @@ function renderSchemaMappings(auto=false){
   box.appendChild(row)
  })
 }
-// Structure mode keeps object keys literal; only arrays introduce repetition.
-function structureEntries(value,includeContainers=false){
- const out=[];
- function rec(v,p){
-  const t=typeOf(v),container=v!==null&&typeof v==="object";
-  if(includeContainers||!container||!Object.keys(v).length)out.push({p,v,t,name:String(p.at(-1)??"$")});
-  if(Array.isArray(v)){if(v.length)rec(v[0],[...p,"*"])}
-  else if(container)Object.entries(v).forEach(([k,x])=>rec(x,[...p,k]));
- }
- rec(value,[]);return out
-}
 function convertStructure(source,template){
  const defaults=$("#schemaKeepDefaults").checked;
  const mappings=Object.entries(schemaMappings).map(([key,raw])=>({target:parsePathKey(key),cfg:mappingConfig(raw)})).filter(x=>x.cfg.source);
@@ -653,8 +642,9 @@ function convertStructure(source,template){
    if(value!==undefined&&mapping.cfg.mode==="lookup")value=resolveLookupValue(value,mapping.cfg);
    if(value!==undefined)return clone(value);
   }
-  if(Array.isArray(v)){
-   if(!v.length)return defaults?clone(v):[];
+  if(Array.isArray(v)||isObjectMap(v)){
+   const array=Array.isArray(v),sample=array?v.find(isPlainObject):Object.values(v)[0];
+   if(!sample)return defaults?clone(v):blankLike(v);
    const axes=new Map();
    for(const m of mappings){
     if(m.target.length<=p.length||!p.every((k,i)=>m.target[i]===k)||m.target[p.length]!=="*")continue;
@@ -664,10 +654,11 @@ function convertStructure(source,template){
    if(axes.size>1)throw new Error("한 목표 배열에 서로 다른 B 반복 컬렉션을 연결할 수 없습니다.");
    if(axes.size){
     const rows=[...axes.values()][0];
-    if(!Array.isArray(rows))throw new Error("매핑된 반복 경로가 배열이 아닙니다.");
-    return rows.map((_,i)=>rec(v[0],[...p,"*"],[...indices,i]));
+    if(!Array.isArray(rows)&&!isPlainObject(rows))throw new Error("매핑된 반복 경로가 컬렉션이 아닙니다.");
+    const entries=Object.keys(rows).map(k=>[k,rec(sample,[...p,"*"],[...indices,Array.isArray(rows)?Number(k):k])]);
+    return array?entries.map(([,value])=>value):Object.fromEntries(entries);
    }
-   return defaults?clone(v):[];
+   return defaults?clone(v):blankLike(v);
   }
   if(isPlainObject(v))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,rec(x,[...p,k],indices)]));
   return defaults?clone(v):blankLike(v);
