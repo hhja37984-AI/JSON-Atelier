@@ -59,10 +59,10 @@
     <label class="btn" style="text-align:center">A 파일 불러오기
       <input id="schemaTargetInput" type="file" accept=".json,application/json" hidden>
     </label>
-    <label>기준 객체
+    <label>목표 구조
       <select id="schemaTargetPath"><option value="">A 파일을 먼저 불러오세요</option></select>
     </label>
-    <div class="muted">A에서 선택한 객체의 모양을 목표 구조로 사용합니다.</div>
+    <div class="muted">A에서 선택한 객체 또는 배열의 전체 모양을 목표 구조로 사용합니다.</div>
   </div>
 
   <div class="section">
@@ -70,10 +70,11 @@
       <strong>② 현재 파일 B</strong>
       <span class="badge" id="schemaSourceStatus">현재 JSON 없음</span>
     </div>
+    <label>변환 방식<select id="schemaMode"><option value="structure">전체 구조 교체</option><option value="items">기존 항목별 변환</option></select></label>
     <label>변환할 범위
       <select id="schemaSourcePath"><option value="">현재 JSON을 먼저 여세요</option></select>
     </label>
-    <div class="muted">배열을 고르면 배열 안의 객체들을 한꺼번에 변환합니다.</div>
+    <div class="muted">전체 구조 교체는 선택 범위 자체를 A 구조로 바꿉니다. $를 선택하면 파일 전체가 교체됩니다. 항목별 변환은 B의 배열·객체 묶음을 유지합니다.</div>
   </div>
 
   <div class="section">
@@ -362,7 +363,7 @@ function collectTargetObjects(root){
  const out=[];
  function rec(v,p=[]){
   if(v&&typeof v==="object"){
-   if(!Array.isArray(v))out.push({p,v,label:`${labelPath(p)} · Object (${Object.keys(v).length})`});
+   out.push({p,v,label:`${labelPath(p)} · ${Array.isArray(v)?"Array":"Object"} (${Object.keys(v).length})`});
    Object.entries(v).forEach(([k,x])=>rec(x,[...p,Array.isArray(v)?Number(k):k]));
   }
  }
@@ -509,6 +510,7 @@ function currentSourceScope(){
 }
 function sourceSample(scope){
  if(!scope)return null;
+ if($("#schemaMode").value==="structure")return scope.v;
  if(Array.isArray(scope.v))return scope.v.find(isPlainObject)||null;
  if(isObjectMap(scope.v))return Object.values(scope.v).find(isPlainObject)||null;
  return isPlainObject(scope.v)?scope.v:null
@@ -566,14 +568,14 @@ function refreshSchemaSelectors(){
  ta.innerHTML="";
  if(!schemaTargetData){ta.innerHTML='<option>A 파일을 먼저 불러오세요</option>';$("#schemaTargetStatus").textContent="불러오지 않음"}
  else{
-  const opts=collectTargetObjects(schemaTargetData);
+  const opts=collectTargetObjects(schemaTargetData).filter(x=>$("#schemaMode").value==="structure"||isPlainObject(x.v));
   opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if(i===0)o.selected=true;ta.appendChild(o)});
   $("#schemaTargetStatus").textContent=schemaTargetName||"A loaded";
  }
  sa.innerHTML="";
  if(data===null){sa.innerHTML='<option>현재 JSON을 먼저 여세요</option>';$("#schemaSourceStatus").textContent="현재 JSON 없음"}
  else{
-  const opts=collectSourceScopes(data);
+  const opts=$("#schemaMode").value==="structure"?collectTargetObjects(data):collectSourceScopes(data);
   opts.forEach((x,i)=>{const o=document.createElement("option");o.textContent=x.label;o.dataset.path=pathKey(x.p);if(i===0)o.selected=true;sa.appendChild(o)});
   $("#schemaSourceStatus").textContent=fileName.replace(/-edited\.json$/,"");
  }
@@ -582,12 +584,13 @@ function refreshSchemaSelectors(){
 function renderSchemaMappings(auto=false){
  const box=$("#schemaMappingList"),template=currentTargetTemplate(),scope=currentSourceScope(),sample=sourceSample(scope);
  if(!template||!sample){box.innerHTML='<div class="muted">A와 B의 범위를 선택하면 매핑 후보가 표시됩니다.</div>';return}
- const targets=leafEntries(template),sources=leafEntries(sample),lookups=collectLookupTables(data);
+ const whole=$("#schemaMode").value==="structure";
+ const targets=whole?structureEntries(template):leafEntries(template),sources=whole?structureEntries(sample,true):leafEntries(sample),lookups=collectLookupTables(data);
  if(auto)schemaMappings={};
  box.innerHTML="";
  targets.forEach(t=>{
   const tk=pathKey(t.p);
-  if(auto){const candidate=autoSourceFor(t,sources);schemaMappings[tk]={source:candidate?pathKey(candidate.p):"",mode:"direct",lookupPath:"",lookupKey:"",lookupValue:"",missing:"skip"}}
+  if(auto){const candidate=whole&&t.t==="object"?null:autoSourceFor(t,sources);schemaMappings[tk]={source:candidate?pathKey(candidate.p):"",mode:"direct",lookupPath:"",lookupKey:"",lookupValue:"",missing:"skip"}}
   let cfg=mappingConfig(schemaMappings[tk]);schemaMappings[tk]=cfg;
   const row=document.createElement("div");row.className="mappingRow";
   const hd=document.createElement("div");hd.className="mappingTarget";hd.innerHTML=`<code>${esc(labelPath(t.p))}</code><span class="typePill">${esc(t.t)}</span>`;row.appendChild(hd);
@@ -632,6 +635,51 @@ function renderSchemaMappings(auto=false){
   }
   box.appendChild(row)
  })
+}
+// Structure mode keeps object keys literal; only arrays introduce repetition.
+function structureEntries(value,includeContainers=false){
+ const out=[];
+ function rec(v,p){
+  const t=typeOf(v),container=v!==null&&typeof v==="object";
+  if(includeContainers||!container||!Object.keys(v).length)out.push({p,v,t,name:String(p.at(-1)??"$")});
+  if(Array.isArray(v)){if(v.length)rec(v[0],[...p,"*"])}
+  else if(container)Object.entries(v).forEach(([k,x])=>rec(x,[...p,k]));
+ }
+ rec(value,[]);return out
+}
+function convertStructure(source,template){
+ const defaults=$("#schemaKeepDefaults").checked;
+ const mappings=Object.entries(schemaMappings).map(([key,raw])=>({target:parsePathKey(key),cfg:mappingConfig(raw)})).filter(x=>x.cfg.source);
+ const bind=(p,indices)=>{let i=0;return p.map(k=>k==="*"&&i<indices.length?indices[i++]:k)};
+ function rec(v,p,indices){
+  const mapping=mappings.find(x=>pathKey(x.target)===pathKey(p));
+  if(mapping){
+   let value=getFrom(source,bind(parsePathKey(mapping.cfg.source),indices));
+   if(value!==undefined&&mapping.cfg.mode==="lookup")value=resolveLookupValue(value,mapping.cfg);
+   if(value!==undefined)return clone(value);
+  }
+  if(Array.isArray(v)){
+   if(!v.length)return defaults?clone(v):[];
+   const axes=new Map();
+   for(const m of mappings){
+    if(m.target.length<=p.length||!p.every((k,i)=>m.target[i]===k)||m.target[p.length]!=="*")continue;
+    const sp=parsePathKey(m.cfg.source),stars=sp.flatMap((k,i)=>k==="*"?[i]:[]),at=stars[indices.length];
+    if(at!==undefined){const axis=bind(sp.slice(0,at),indices);axes.set(pathKey(axis),getFrom(source,axis))}
+   }
+   if(axes.size>1)throw new Error("한 목표 배열에 서로 다른 B 반복 컬렉션을 연결할 수 없습니다.");
+   if(axes.size){
+    const rows=[...axes.values()][0];
+    if(!Array.isArray(rows))throw new Error("매핑된 반복 경로가 배열이 아닙니다.");
+    return rows.map((_,i)=>rec(v[0],[...p,"*"],[...indices,i]));
+   }
+   return defaults?clone(v):[];
+  }
+  if(isPlainObject(v))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,rec(x,[...p,k],indices)]));
+  return defaults?clone(v):blankLike(v);
+ }
+ const out=rec(template,[],[]);
+ if($("#schemaKeepExtras").checked)mergeExtras(out,source);
+ return out
 }
 function mergeExtras(target,source){
  if(!source||typeof source!=="object"||Array.isArray(source)||!target||typeof target!=="object"||Array.isArray(target))return target;
@@ -695,6 +743,8 @@ function buildSchemaConversion(){
  const template=currentTargetTemplate(),scope=currentSourceScope();
  if(!template||!scope)throw new Error("A 기준 객체와 B 변환 범위를 선택해주세요.");
 
+ if($("#schemaMode").value==="structure")return {path:scope.p,value:convertStructure(scope.v,template),count:1};
+
  const axis=wildcardAxis();
  if(axis){
   const collection=getFrom(scope.v,axis),rows=collectionRows(collection);
@@ -732,6 +782,7 @@ $("#schemaTargetInput").onchange=async e=>{
  try{schemaTargetData=JSON.parse(await f.text());schemaTargetName=f.name;schemaMappings={};refreshSchemaSelectors();toast("목표 파일 A를 불러왔습니다.")}
  catch(err){alert("A 파일 JSON 파싱 오류:\n"+err.message)}
 };
+$("#schemaMode").onchange=()=>refreshSchemaSelectors();
 $("#schemaTargetPath").onchange=()=>renderSchemaMappings(true);
 $("#schemaSourcePath").onchange=()=>renderSchemaMappings(true);
 $("#schemaAutoMapBtn").onclick=()=>{renderSchemaMappings(true);toast("이름과 타입 기준으로 자동 매핑했습니다.")};
