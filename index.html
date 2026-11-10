@@ -11,6 +11,7 @@
 <header class="top"><div class="brand">JSON Atelier</div><button class="icon" id="undoBtn">↶</button><button class="icon" id="redoBtn">↷</button><button class="icon" id="saveBtn">⇩</button></header>
 <div class="toolbar">
 <label class="btn">JSON 열기<input id="fileInput" type="file" accept=".json,application/json" hidden></label>
+<button class="btn" id="mergeBtn">JSON 병합</button>
 <button class="btn" id="pasteBtn">붙여넣기</button><button class="btn" id="copyBtn">전체 복사</button>
 <button class="btn" id="expandBtn">전체 펼치기</button><button class="btn" id="collapseBtn">전체 접기</button>
 <button class="btn" id="fieldViewBtn">필드만 보기</button>
@@ -140,6 +141,21 @@
   </div>
 </div></div>
 
+<div class="drawer" id="mergeSheet"><div class="sheet">
+  <div class="sheetHd"><strong>JSON 병합</strong><button class="icon close">×</button></div>
+  <div class="section">
+    <label class="btn" style="text-align:center">추가할 JSON 열기<input id="mergeInput" type="file" accept=".json,application/json" hidden></label>
+    <span class="muted" id="mergeSourceName">추가 파일 없음</span>
+    <label>병합할 배열<select id="mergePath"></select></label>
+    <label>삽입 순번<input id="mergePosition" type="number" min="1" step="1" inputmode="numeric" disabled></label>
+    <div class="muted">1은 맨 앞입니다. 기존 항목 수보다 1 큰 순번을 입력하면 맨 뒤에 들어갑니다.</div>
+  </div>
+  <div class="section">
+    <div id="mergePreview" class="schemaPreview" aria-live="polite"></div>
+    <div class="minirow"><button class="btn primary" id="applyMergeBtn" disabled>병합 적용</button></div>
+  </div>
+</div></div>
+
 <div class="drawer" id="compareSheet"><div class="sheet">
   <div class="sheetHd"><strong>JSON Compare</strong><button class="icon close">×</button></div>
 
@@ -228,6 +244,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let data=null,fileName="edited.json",selectedScopePath=null,fieldViewFilters=[];
 let schemaTargetData=null,schemaTargetName="",schemaMappings={};
 let transferSourceData=null,transferSourceName="",transferRules=[{source:"",target:""}];
+let mergeSource=null;
 let compareData=null,compareName="compare-A.json";
 let undoStack=[],redoStack=[],batchDepth=0,batchSnapshot=null,transforms=[{type:"trim"}];
 const clone=x=>structuredClone(x), esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -290,6 +307,7 @@ function render(){
  histBtns();renderFieldSuggestions();
  if(typeof refreshSchemaSelectors==="function" && $("#schemaSourcePath")) refreshSchemaSelectors();
  if(typeof refreshTransferSelectors==="function" && $("#transferTargetPath")) refreshTransferSelectors();
+ if($("#mergeSheet").classList.contains("show")) refreshMerge();
  if(typeof renderCompare==="function" && $("#compareList")) renderCompare()
 }
 function renderNode(value,path,keyLabel,open=false,force=false){
@@ -1026,6 +1044,128 @@ $("#applyTransferBtn").onclick=()=>{
   $("#transferPreview").textContent=transferPreviewText(r);
   toast("Transfer 완료 · "+r.changes.length+"개 필드")
  }catch(e){alert(e.message)}
+};
+
+// JSON files do not carry a schema. Compare their observed keys and value types.
+function mergeShape(value){
+ const type=typeOf(value);
+ if(type==="object"){
+  return [type,Object.keys(value).sort().map(key=>[key,mergeShape(value[key])])];
+ }
+ if(type==="array"){
+  const shapes=new Map();
+  for(const item of value){
+   const shape=mergeShape(item);
+   shapes.set(JSON.stringify(shape),shape);
+  }
+  return [type,[...shapes.keys()].sort().map(key=>shapes.get(key))];
+ }
+ return [type];
+}
+
+function sameMergeShape([type,left],[otherType,right]){
+ if(type!==otherType)return false;
+ if(type==="array"){
+  // An empty array provides no evidence about the type of its items.
+  return !left.length||!right.length||(
+   left.every(shape=>right.some(other=>sameMergeShape(shape,other)))&&
+   right.every(shape=>left.some(other=>sameMergeShape(shape,other)))
+  );
+ }
+ if(type==="object"){
+  return left.length===right.length&&left.every(([key,shape],i)=>
+   key===right[i][0]&&sameMergeShape(shape,right[i][1]));
+ }
+ return true;
+}
+
+function mergeArrayAt(root,path){
+ let value=root;
+ for(const key of path){
+  if(value===null||typeof value!=="object"||!Object.hasOwn(value,key))return null;
+  value=value[key];
+ }
+ return Array.isArray(value)?value:null;
+}
+
+function refreshMerge(resetPosition=false){
+ const select=$("#mergePath"),previous=select.value;
+ select.replaceChildren();
+ let message="";
+ if(data===null)message="기준 JSON을 먼저 열어주세요.";
+ else if(!mergeSource)message="추가할 JSON을 열어주세요.";
+ else if(!sameMergeShape(mergeShape(data),mergeShape(mergeSource.data)))message="두 파일의 필드 구조 또는 값 유형이 다릅니다.";
+ else{
+  walk(data,[],(value,path)=>{
+   if(!Array.isArray(value))return;
+   const source=mergeArrayAt(mergeSource.data,path);
+   if(source?.length&&sameMergeShape(mergeShape(value),mergeShape(source))){
+    select.add(new Option(`${fmtPath(path)} · 기존 ${value.length}개 / 추가 ${source.length}개`,pathKey(path)));
+   }
+  });
+  if(!select.options.length)message="같은 경로에서 추가할 항목이 있는 배열을 찾지 못했습니다.";
+ }
+ select.disabled=Boolean(message);
+ $("#mergePosition").disabled=Boolean(message);
+ $("#applyMergeBtn").disabled=Boolean(message);
+ if(message){
+  select.add(new Option("선택할 배열 없음",""));
+  $("#mergePosition").value="";
+  $("#mergePreview").textContent=message;
+  return;
+ }
+ if([...select.options].some(option=>option.value===previous))select.value=previous;
+ updateMergePosition(resetPosition||select.value!==previous);
+}
+
+function updateMergePosition(reset=false){
+ const path=parsePathKey($("#mergePath").value);
+ const target=mergeArrayAt(data,path);
+ const source=mergeArrayAt(mergeSource.data,path);
+ const input=$("#mergePosition");
+ input.max=String(target.length+1);
+ if(reset)input.value=input.max;
+ const position=input.valueAsNumber;
+ const valid=Number.isInteger(position)&&position>=1&&position<=target.length+1;
+ $("#applyMergeBtn").disabled=!valid;
+ $("#mergePreview").textContent=valid
+  ?`${fmtPath(path)} · ${position}번째부터 ${source.length}개 삽입 (총 ${target.length+source.length}개)`
+  :`1~${target.length+1} 사이의 순번을 입력해주세요.`;
+}
+
+$("#mergeBtn").onclick=()=>{
+ $("#mergeSheet").classList.add("show");
+ refreshMerge();
+};
+$("#mergeInput").onchange=async e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+ e.target.value="";
+ e.target.disabled=true;
+ mergeSource=null;
+ $("#mergeSourceName").textContent="추가 파일 없음";
+ refreshMerge();
+ try{
+  mergeSource={data:JSON.parse(await file.text())};
+  $("#mergeSourceName").textContent=file.name;
+  refreshMerge(true);
+ }catch(err){alert("JSON 파싱 오류: "+err.message)}
+ finally{e.target.disabled=false;}
+};
+$("#mergePath").onchange=()=>updateMergePosition(true);
+$("#mergePosition").oninput=()=>updateMergePosition();
+$("#applyMergeBtn").onclick=()=>{
+ refreshMerge();
+ if($("#applyMergeBtn").disabled)return;
+ const path=parsePathKey($("#mergePath").value);
+ const index=$("#mergePosition").valueAsNumber-1;
+ const target=mergeArrayAt(data,path),source=mergeArrayAt(mergeSource.data,path);
+ const result=target.slice(0,index).concat(clone(source),target.slice(index));
+ history("JSON merge");
+ setAtPath(path,result);
+ $("#mergeSheet").classList.remove("show");
+ render();
+ toast(`병합 완료 · ${source.length}개 추가`);
 };
 
 function renderTransforms(){const e=$("#transformList");e.innerHTML="";transforms.forEach((t,i)=>{const d=document.createElement("div");d.className="pipelineStep";d.innerHTML=`<div class="stepHd"><strong>단계 ${i+1}</strong></div>`;const s=document.createElement("select");["trim","regexReplace","removeText","prefix","suffix","lower","upper"].forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;s.appendChild(o)});s.value=t.type;s.onchange=()=>{t.type=s.value;renderTransforms()};d.appendChild(s);if(t.type==="regexReplace"){["pattern","replace","flags"].forEach(k=>{const x=document.createElement("input");x.placeholder=k;x.value=t[k]||"";x.oninput=()=>t[k]=x.value;d.appendChild(x)})}else if(["removeText","prefix","suffix"].includes(t.type)){const x=document.createElement("input");x.value=t.text||"";x.oninput=()=>t.text=x.value;d.appendChild(x)}const rm=document.createElement("button");rm.className="mini";rm.textContent="삭제";rm.onclick=()=>{transforms.splice(i,1);renderTransforms()};d.appendChild(rm);e.appendChild(d)})}
