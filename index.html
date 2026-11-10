@@ -149,6 +149,7 @@
     <label>병합할 배열<select id="mergePath"></select></label>
     <label>삽입 순번<input id="mergePosition" type="number" min="1" step="1" inputmode="numeric" disabled></label>
     <div class="muted">1은 맨 앞입니다. 기존 항목 수보다 1 큰 순번을 입력하면 맨 뒤에 들어갑니다.</div>
+    <label>다시 매길 순번 필드<select id="mergeSequenceField" disabled><option value="">기존 값 유지</option></select></label>
   </div>
   <div class="section">
     <div id="mergePreview" class="schemaPreview" aria-live="polite"></div>
@@ -1088,6 +1089,40 @@ function mergeArrayAt(root,path){
  return Array.isArray(value)?value:null;
 }
 
+function mergeSequenceFields(row,path=[]){
+ if(isPlainObject(row)){
+  return Object.keys(row).flatMap(key=>mergeSequenceFields(row[key],[...path,key]));
+ }
+ return path.length&&mergeSequenceType(row)?[path]:[];
+}
+
+function mergeSequenceType(value){
+ if(Number.isInteger(value))return "number";
+ if(typeof value==="string"&&/^-?[0-9]+$/.test(value))return "string";
+ return "";
+}
+
+function mergeSequenceParent(row,path){
+ for(const key of path.slice(0,-1)){
+  if(!isPlainObject(row)||!Object.hasOwn(row,key))return null;
+  row=row[key];
+ }
+ return isPlainObject(row)&&Object.hasOwn(row,path.at(-1))?row:null;
+}
+
+function refreshMergeSequence(rows=[],reset=false){
+ const select=$("#mergeSequenceField"),previous=select.value;
+ select.replaceChildren(new Option("기존 값 유지",""));
+ for(const path of mergeSequenceFields(rows[0])){
+  const key=path.at(-1),type=mergeSequenceType(mergeSequenceParent(rows[0],path)[key]);
+  if(rows.every(row=>mergeSequenceType(mergeSequenceParent(row,path)?.[key])===type)){
+   select.add(new Option(fmtPath(path),pathKey(path)));
+  }
+ }
+ select.disabled=select.options.length===1;
+ if(!reset&&[...select.options].some(option=>option.value===previous))select.value=previous;
+}
+
 function refreshMerge(resetPosition=false){
  const select=$("#mergePath"),previous=select.value;
  select.replaceChildren();
@@ -1111,11 +1146,19 @@ function refreshMerge(resetPosition=false){
  if(message){
   select.add(new Option("선택할 배열 없음",""));
   $("#mergePosition").value="";
+  refreshMergeSequence();
   $("#mergePreview").textContent=message;
   return;
  }
  if([...select.options].some(option=>option.value===previous))select.value=previous;
- updateMergePosition(resetPosition||select.value!==previous);
+ refreshMergeSelection(resetPosition||select.value!==previous);
+}
+
+function refreshMergeSelection(reset){
+ const path=parsePathKey($("#mergePath").value);
+ const target=mergeArrayAt(data,path),source=mergeArrayAt(mergeSource.data,path);
+ refreshMergeSequence(target.concat(source),reset);
+ updateMergePosition(reset);
 }
 
 function updateMergePosition(reset=false){
@@ -1126,11 +1169,15 @@ function updateMergePosition(reset=false){
  input.max=String(target.length+1);
  if(reset)input.value=input.max;
  const position=input.valueAsNumber;
+ const sequenceField=$("#mergeSequenceField").selectedOptions[0];
  const valid=Number.isInteger(position)&&position>=1&&position<=target.length+1;
  $("#applyMergeBtn").disabled=!valid;
  $("#mergePreview").textContent=valid
   ?`${fmtPath(path)} · ${position}번째부터 ${source.length}개 삽입 (총 ${target.length+source.length}개)`
   :`1~${target.length+1} 사이의 순번을 입력해주세요.`;
+ if(valid&&sequenceField.value){
+  $("#mergePreview").textContent+=`\n${sequenceField.text} · 1부터 ${target.length+source.length}까지 다시 매김`;
+ }
 }
 
 $("#mergeBtn").onclick=()=>{
@@ -1152,7 +1199,8 @@ $("#mergeInput").onchange=async e=>{
  }catch(err){alert("JSON 파싱 오류: "+err.message)}
  finally{e.target.disabled=false;}
 };
-$("#mergePath").onchange=()=>updateMergePosition(true);
+$("#mergePath").onchange=()=>refreshMergeSelection(true);
+$("#mergeSequenceField").onchange=()=>updateMergePosition();
 $("#mergePosition").oninput=()=>updateMergePosition();
 $("#applyMergeBtn").onclick=()=>{
  refreshMerge();
@@ -1160,7 +1208,16 @@ $("#applyMergeBtn").onclick=()=>{
  const path=parsePathKey($("#mergePath").value);
  const index=$("#mergePosition").valueAsNumber-1;
  const target=mergeArrayAt(data,path),source=mergeArrayAt(mergeSource.data,path);
- const result=target.slice(0,index).concat(clone(source),target.slice(index));
+ const sequence=$("#mergeSequenceField").value;
+ const merged=target.slice(0,index).concat(sequence?source:clone(source),target.slice(index));
+ const result=sequence?clone(merged):merged;
+ if(sequence){
+  const fieldPath=parsePathKey(sequence),key=fieldPath.at(-1);
+  result.forEach((row,i)=>{
+   const parent=mergeSequenceParent(row,fieldPath);
+   parent[key]=typeof parent[key]==="string"?String(i+1):i+1;
+  });
+ }
  history("JSON merge");
  setAtPath(path,result);
  $("#mergeSheet").classList.remove("show");
