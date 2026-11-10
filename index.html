@@ -210,9 +210,21 @@
 
 <div class="drawer" id="toolsSheet"><div class="sheet"><div class="sheetHd"><strong>도구</strong><button class="icon close">×</button></div>
 <div class="section"><div style="display:flex;align-items:center;gap:8px"><strong style="margin-right:auto">컬러 팔레트</strong><span class="badge" id="themeBadge">Graphite</span></div><div id="themeGrid" class="themeGrid"></div></div>
-<div class="section"><button class="btn" id="frequencyBtn">반복 구문 분석</button><button class="btn" id="validateBtn">JSON 검증</button><button class="btn" id="findEmptyBtn">빈 값 / null 찾기</button><button class="btn danger" id="clearSavedBtn">저장된 Pipeline/Recipe 삭제</button></div>
+<div class="section"><button class="btn" id="schemaCompareBtn">스키마 비교</button><button class="btn" id="frequencyBtn">반복 구문 분석</button><button class="btn" id="validateBtn">JSON 검증</button><button class="btn" id="findEmptyBtn">빈 값 / null 찾기</button><button class="btn danger" id="clearSavedBtn">저장된 Pipeline/Recipe 삭제</button></div>
 </div></div>
 
+
+<div class="drawer" id="schemaCompareSheet"><div class="sheet">
+  <div class="sheetHd"><strong>스키마 비교</strong><button class="icon close">×</button></div>
+  <div class="section">
+    <label class="btn" style="text-align:center">비교 파일 A 열기<input id="schemaCompareInput" type="file" accept=".json,application/json" hidden></label>
+    <div class="muted" id="schemaCompareName">비교 파일 A 없음</div>
+    <div class="muted">A와 현재 편집 중인 JSON(B)의 필드와 값 유형을 비교합니다. 빈 배열의 항목 구조는 건너뜁니다.</div>
+  </div>
+  <div class="section">
+    <div id="schemaCompareResult" class="schemaPreview" aria-live="polite"></div>
+  </div>
+</div></div>
 
 <div class="drawer" id="frequencySheet"><div class="sheet frequencySheet">
 <div class="sheetHd"><strong>반복 구문 분석</strong><button class="icon close">×</button></div>
@@ -246,6 +258,7 @@ let data=null,fileName="edited.json",selectedScopePath=null,fieldViewFilters=[];
 let schemaTargetData=null,schemaTargetName="",schemaMappings={};
 let transferSourceData=null,transferSourceName="",transferRules=[{source:"",target:""}];
 let mergeSource=null;
+let schemaCompareFile=null;
 let compareData=null,compareName="compare-A.json";
 let undoStack=[],redoStack=[],batchDepth=0,batchSnapshot=null,transforms=[{type:"trim"}];
 const clone=x=>structuredClone(x), esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -309,6 +322,7 @@ function render(){
  if(typeof refreshSchemaSelectors==="function" && $("#schemaSourcePath")) refreshSchemaSelectors();
  if(typeof refreshTransferSelectors==="function" && $("#transferTargetPath")) refreshTransferSelectors();
  if($("#mergeSheet").classList.contains("show")) refreshMerge();
+ if($("#schemaCompareSheet").classList.contains("show")) renderSchemaComparison();
  if(typeof renderCompare==="function" && $("#compareList")) renderCompare()
 }
 function renderNode(value,path,keyLabel,open=false,force=false){
@@ -1079,6 +1093,82 @@ function sameMergeShape([type,left],[otherType,right]){
  }
  return true;
 }
+
+function describeSchemaShape([type,children]){
+ if(type==="object"){
+  return "{"+children.map(([key,shape])=>JSON.stringify(key)+": "+describeSchemaShape(shape)).join(", ")+"}";
+ }
+ if(type==="array")return "["+children.map(describeSchemaShape).join(" | ")+"]";
+ return type;
+}
+
+function compareSchemaShapes(a,b,path="$",differences=[]){
+ const [aType,left]=a,[bType,right]=b;
+ if(aType!==bType){
+  differences.push(`${path} · A: ${aType} / B: ${bType}`);
+ }else if(aType==="object"){
+  const aFields=new Map(left),bFields=new Map(right);
+  for(const key of new Set([...aFields.keys(),...bFields.keys()])){
+   const fieldPath=`${path}[${JSON.stringify(key)}]`;
+   const aField=aFields.get(key),bField=bFields.get(key);
+   if(aField&&bField)compareSchemaShapes(aField,bField,fieldPath,differences);
+   else differences.push(`${fieldPath} · ${aField?"A":"B"}에만 있음 (${describeSchemaShape(aField||bField)})`);
+  }
+ }else if(aType==="array"&&left.length&&right.length){
+  const itemPath=path+"[*]";
+  if(left.length===1&&right.length===1){
+   compareSchemaShapes(left[0],right[0],itemPath,differences);
+  }else{
+   for(const [side,shapes,others] of [["A",left,right],["B",right,left]]){
+    for(const shape of shapes){
+     if(!others.some(other=>sameMergeShape(shape,other))){
+      differences.push(`${itemPath} · ${side}에만 있는 항목 구조 ${describeSchemaShape(shape)}`);
+     }
+    }
+   }
+  }
+ }
+ return differences;
+}
+
+function renderSchemaComparison(){
+ const output=$("#schemaCompareResult");
+ if(data===null){
+  output.textContent="현재 JSON(B)을 먼저 열어주세요.";
+  return;
+ }
+ if(!schemaCompareFile){
+  output.textContent="비교 파일 A를 열어주세요.";
+  return;
+ }
+ const differences=compareSchemaShapes(schemaCompareFile.shape,mergeShape(data));
+ output.textContent=differences.length
+  ?`구조 차이 ${differences.length}개\n\n${differences.join("\n")}`
+  :"비교한 범위에서 구조 차이가 없습니다.";
+}
+
+$("#schemaCompareBtn").onclick=()=>{
+ $("#toolsSheet").classList.remove("show");
+ $("#schemaCompareSheet").classList.add("show");
+ renderSchemaComparison();
+};
+$("#schemaCompareInput").onchange=async e=>{
+ const input=e.target,file=input.files[0];
+ if(!file)return;
+ input.value="";
+ input.disabled=true;
+ try{
+  schemaCompareFile={shape:mergeShape(JSON.parse(await file.text()))};
+  $("#schemaCompareName").textContent=file.name;
+  renderSchemaComparison();
+ }catch(err){
+  schemaCompareFile=null;
+  $("#schemaCompareName").textContent="비교 파일 A 없음";
+  $("#schemaCompareResult").textContent="JSON 읽기 오류: "+err.message;
+ }finally{
+  input.disabled=false;
+ }
+};
 
 function mergeArrayAt(root,path){
  let value=root;
