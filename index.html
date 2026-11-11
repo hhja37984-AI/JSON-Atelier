@@ -330,6 +330,7 @@ function renderNode(value,path,keyLabel,open=false,force=false){
  if(t==="object"||t==="array"){
   const d=document.createElement("details");d.className="node";d.dataset.depth=String(path.length);d.open=fieldViewFilters.length?true:(open||path.length<1);
   const s=document.createElement("summary");s.className="sum";s.innerHTML=`<span class="caret">›</span><span class="key">${esc(keyLabel)}</span><span class="type">${t==="array"?"Array":"Object"} · ${Object.keys(value).length}</span>`;d.appendChild(s);
+  s.style.setProperty("--header-strength", `${100 * 0.75 ** path.length}%`);
   if(!fieldViewFilters.length){
    const actions=document.createElement("span");
    actions.className="nodeActions";

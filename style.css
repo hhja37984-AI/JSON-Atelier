@@ -30,19 +30,18 @@ button{touch-action:manipulation}
 .drop{margin:12px;border:1.5px dashed var(--line);border-radius:8px;padding:22px 18px;text-align:center;background:var(--surface2)}
 .tree{display:grid;gap:0;width:100%;min-width:0}
 
-/* Root: full JSON panel width, zero radius. */
+/* Container headers and leaf cards share the full tree width. */
 details.node{border:0;border-radius:0;background:transparent;overflow:visible;min-width:0}
-details.node>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;padding:9px 10px;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--surface2);min-width:0;width:100%}
+details.node>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;padding:9px 10px;border:1px solid var(--line);border-inline:0;background:var(--surface2);background:color-mix(in srgb,var(--surface2) var(--header-strength,100%),transparent);min-width:0;width:100%}
 details.node>summary::-webkit-details-marker{display:none}
-details.node[data-depth="0"]>summary{border-radius:0;border-left:0;border-right:0;width:100%}
 .caret{display:inline-block;transition:.15s transform;flex:0 0 auto}
 details[open]>.sum .caret{transform:rotate(90deg)}
 .key{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .type{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
 
-/* Left-only indentation. Right edge remains flush. */
-.children{position:relative;margin-left:12px;padding:7px 0 0 12px;display:grid;gap:0;min-width:0;width:calc(100% - 12px)}
-.children::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--line)}
+.children{display:grid;gap:0;min-width:0;width:100%}
+.children>.card:first-child,
+.children>details.node:first-child>summary{border-top:0}
 
 /* Remove doubled seams between adjacent hierarchy rows. */
 .children>details.node+details.node>summary,
@@ -50,8 +49,7 @@ details[open]>.sum .caret{transform:rotate(90deg)}
 .children>details.node+.card,
 .children>.card+details.node>summary{border-top:0}
 
-/* Leaf cards: inset only from left hierarchy lane, flush right. */
-.card{width:100%;margin:0;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--surface3);padding:10px;display:grid;gap:8px;min-width:0}
+.card{width:100%;margin:0;border:1px solid var(--line);border-inline:0;background:var(--surface3);padding:10px;display:grid;gap:8px;min-width:0}
 .rowHead{display:flex;align-items:center;gap:8px}
 .rowHead .k{font-weight:800;word-break:break-all}
 .rowHead .path{margin-left:auto;color:var(--muted);font-size:11px;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -123,7 +121,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 
 .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:var(--surface3);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 13px;display:none;max-width:88vw;text-align:center}.toast.show{display:block}
 .hidden{display:none!important}
-@media(max-width:520px){.children{margin-left:9px;padding-left:10px;width:calc(100% - 9px)}details.node>summary{padding-left:9px;padding-right:9px}}
+@media(max-width:520px){details.node>summary{padding-left:9px;padding-right:9px}}
 @media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.bottomNav{left:auto;width:360px;right:16px;border:1px solid var(--line);border-radius:10px 10px 0 0}}
 
 /* Repeated phrase inspection */
