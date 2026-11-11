@@ -30,7 +30,7 @@ button{touch-action:manipulation}
 .drop{margin:12px;border:1.5px dashed var(--line);border-radius:8px;padding:22px 18px;text-align:center;background:var(--surface2)}
 .tree{display:grid;gap:0;width:100%;min-width:0}
 
-/* Container headers and leaf cards share the full tree width. */
+/* Direct fields share their container header's width. */
 details.node{border:0;border-radius:0;background:transparent;overflow:visible;min-width:0}
 details.node>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;padding:9px 10px;border:1px solid var(--line);border-inline:0;background:var(--surface2);background:color-mix(in srgb,var(--surface2) var(--header-strength,100%),transparent);min-width:0;width:100%}
 details.node>summary::-webkit-details-marker{display:none}
@@ -40,6 +40,7 @@ details[open]>.sum .caret{transform:rotate(90deg)}
 .type{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
 
 .children{display:grid;gap:0;min-width:0;width:100%}
+.children>details.node{margin-inline-start:10px}
 .children>.card:first-child,
 .children>details.node:first-child>summary{border-top:0}
 
@@ -121,7 +122,10 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 
 .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:var(--surface3);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 13px;display:none;max-width:88vw;text-align:center}.toast.show{display:block}
 .hidden{display:none!important}
-@media(max-width:520px){details.node>summary{padding-left:9px;padding-right:9px}}
+@media(max-width:520px){
+  .children>details.node{margin-inline-start:8px}
+  details.node>summary{padding-left:9px;padding-right:9px}
+}
 @media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.bottomNav{left:auto;width:360px;right:16px;border:1px solid var(--line);border-radius:10px 10px 0 0}}
 
 /* Repeated phrase inspection */
