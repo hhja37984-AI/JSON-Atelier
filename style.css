@@ -60,6 +60,8 @@ input[type=text],input[type=number],textarea,select{width:100%;border:1px solid 
 textarea{min-height:96px;resize:vertical}
 input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 .minirow{display:flex;gap:7px;flex-wrap:wrap}
+.nodeActions{display:flex;flex:0 0 auto;gap:4px}
+.nodeActions .mini{padding:4px 6px;min-height:30px;font-size:12px;white-space:nowrap}
 .mini{border:1px solid var(--line);background:var(--chip);color:var(--text);border-radius:7px;padding:7px 9px;min-height:36px}
 .toggle{display:flex;align-items:center;gap:8px}
 .searchbox{display:flex;gap:8px}.searchbox input{flex:1}

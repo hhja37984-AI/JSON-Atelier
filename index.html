@@ -330,8 +330,37 @@ function renderNode(value,path,keyLabel,open=false,force=false){
  if(t==="object"||t==="array"){
   const d=document.createElement("details");d.className="node";d.dataset.depth=String(path.length);d.open=fieldViewFilters.length?true:(open||path.length<1);
   const s=document.createElement("summary");s.className="sum";s.innerHTML=`<span class="caret">›</span><span class="key">${esc(keyLabel)}</span><span class="type">${t==="array"?"Array":"Object"} · ${Object.keys(value).length}</span>`;d.appendChild(s);
+  if(!fieldViewFilters.length){
+   const actions=document.createElement("span");
+   actions.className="nodeActions";
+   const scopeButton=document.createElement("button");
+   scopeButton.type="button";
+   scopeButton.className="mini";
+   scopeButton.textContent="범위 선택";
+   scopeButton.onclick=e=>{
+    e.preventDefault();
+    selectedScopePath=[...path];
+    toast(fmtPath(path)+" 선택됨");
+   };
+   const addButton=document.createElement("button");
+   addButton.type="button";
+   addButton.className="mini";
+   addButton.textContent=t==="array"?"+ 항목":"+ 필드";
+   addButton.onclick=e=>{
+    e.preventDefault();
+    history("add");
+    if(t==="array")value.push(null);
+    else{
+     let k="newKey",i=1;
+     while(k in value)k="newKey"+i++;
+     value[k]="";
+    }
+    render();
+   };
+   actions.append(scopeButton,addButton);
+   s.appendChild(actions);
+  }
   const ch=document.createElement("div");ch.className="children";
-  if(!fieldViewFilters.length){const tools=document.createElement("div");tools.className="minirow";tools.style.padding="7px 0";const a=document.createElement("button");a.className="mini";a.textContent="범위 선택";a.onclick=e=>{e.preventDefault();selectedScopePath=[...path];toast(fmtPath(path)+" 선택됨")};const b=document.createElement("button");b.className="mini";b.textContent=t==="array"?"+ 항목":"+ 필드";b.onclick=e=>{e.preventDefault();history("add");if(t==="array")value.push(null);else{let k="newKey",i=1;while(k in value)k="newKey"+i++;value[k]=""}render()};tools.append(a,b);ch.appendChild(tools)}
   Object.entries(value).forEach(([k,v])=>{const kp=t==="array"?Number(k):k,exact=t==="object"&&selectedKey(k);let show=true;if(fieldViewFilters.length&&!force)show=t==="array"?subtree(v):(exact||subtree(v));if(show)ch.appendChild(renderNode(v,[...path,kp],String(k),false,force||exact))});
   d.appendChild(ch);return d
  }
